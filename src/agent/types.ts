@@ -6,6 +6,7 @@ export interface AgentContext {
     history: ChatMessage[];
 }
 
+
 export interface ChatMessage {
     role: 'system' | 'user' | 'assistant' | 'tool';
     content: string;
@@ -19,6 +20,10 @@ export interface TaskStep {
     id: string;
     description: string;
     status: TaskStatus;
+    createdAt: number;
+    updatedAt?: number;
+    startedAt?: number;
+    completedAt?: number;
 }
 
 export interface Task {
@@ -27,6 +32,16 @@ export interface Task {
     status: TaskStatus;
     steps: TaskStep[];
     createdAt: number;
+    updatedAt: number;
+    
+    // New properties for atomic changes
+    description?: string;
+    contextItems?: string[];
+    progress?: {
+        completedSteps: number;
+        totalSteps: number;
+        percentage: number;
+    };
 }
 
 
