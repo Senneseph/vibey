@@ -14,13 +14,16 @@ import { ChatPanel } from './ui/ChatPanel';
 import { TerminalManager } from './agent/terminal_manager';
 import { createTerminalTools } from './tools/definitions/terminal';
 import { HistoryManager } from './agent/history_manager';
+import { McpService } from './agent/mcp/mcp_service';
+
+// Module-level reference for cleanup
+let mcpService: McpService | undefined;
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('Vibey is now active!');
 
     // 1. Initialize Components
     const workspaceRoot = vscode.workspace.workspaceFolders
-
         ? vscode.workspace.workspaceFolders[0].uri.fsPath
         : process.cwd();
 
@@ -30,9 +33,7 @@ export function activate(context: vscode.ExtensionContext) {
     const gateway = new ToolGateway(policy);
     const taskManager = new TaskManager();
 
-
-
-    // Register tools
+    // Register built-in tools
     const fsTools = createFileSystemTools(policy, workspaceRoot);
     fsTools.forEach(t => gateway.registerTool(t));
 
@@ -42,10 +43,14 @@ export function activate(context: vscode.ExtensionContext) {
     const terminalTools = createTerminalTools(terminalManager);
     terminalTools.forEach(t => gateway.registerTool(t));
 
+    // Initialize MCP Service for external tool discovery
+    mcpService = new McpService(gateway, context);
+    mcpService.initialize().catch(err => {
+        console.error('[Vibey] Failed to initialize MCP service:', err);
+    });
 
     const llm = new OllamaClient();
     const orchestrator = new AgentOrchestrator(llm, gateway, workspaceRoot);
-
 
     const historyManager = new HistoryManager(context, workspaceRoot);
 
@@ -66,7 +71,6 @@ export function activate(context: vscode.ExtensionContext) {
     const startCommand = vscode.commands.registerCommand('vibey.start', () => {
         vscode.commands.executeCommand('workbench.view.extension.vibey-sidebar');
     });
-
 
     const settingsCommand = vscode.commands.registerCommand('vibey.openSettings', () => {
         vscode.commands.executeCommand('workbench.action.openSettings', 'vibey');
@@ -93,9 +97,63 @@ export function activate(context: vscode.ExtensionContext) {
         }
     });
 
+    // MCP Commands
+    const mcpStatusCommand = vscode.commands.registerCommand('vibey.mcpStatus', () => {
+        if (!mcpService) {
+            vscode.window.showErrorMessage('MCP service not initialized');
+            return;
+        }
+        const states = mcpService.getServerStates();
+        if (states.length === 0) {
+            vscode.window.showInformationMessage('No MCP servers configured. Add servers in settings (vibey.mcpServers)');
+            return;
+        }
+
+        const statusLines = states.map(s => {
+            const status = s.status === 'connected' ? '✅' : s.status === 'error' ? '❌' : '⏳';
+            return `${status} ${s.name}: ${s.toolCount} tools, ${s.resourceCount} resources${s.error ? ` (${s.error})` : ''}`;
+        });
+
+        vscode.window.showInformationMessage(`MCP Servers:\n${statusLines.join('\n')}`);
+    });
+
+    const mcpReloadCommand = vscode.commands.registerCommand('vibey.mcpReload', async () => {
+        if (!mcpService) {
+            vscode.window.showErrorMessage('MCP service not initialized');
+            return;
+        }
+        vscode.window.showInformationMessage('Reloading MCP servers...');
+        await mcpService.reloadServers();
+    });
+
+    const mcpListToolsCommand = vscode.commands.registerCommand('vibey.mcpListTools', () => {
+        const allTools = gateway.getToolDefinitions();
+        const toolNames = allTools.map(t => t.name).sort();
+
+        vscode.window.showQuickPick(toolNames, {
+            placeHolder: 'Available tools (built-in + MCP)',
+            canPickMany: false
+        }).then(selected => {
+            if (selected) {
+                const tool = allTools.find(t => t.name === selected);
+                if (tool) {
+                    vscode.window.showInformationMessage(`${tool.name}: ${tool.description}`);
+                }
+            }
+        });
+    });
+
     context.subscriptions.push(startCommand);
     context.subscriptions.push(settingsCommand);
     context.subscriptions.push(selectModelCommand);
+    context.subscriptions.push(mcpStatusCommand);
+    context.subscriptions.push(mcpReloadCommand);
+    context.subscriptions.push(mcpListToolsCommand);
 }
 
-export function deactivate() { }
+export async function deactivate() {
+    if (mcpService) {
+        await mcpService.dispose();
+        mcpService = undefined;
+    }
+}
