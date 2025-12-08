@@ -46,12 +46,35 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.commands.executeCommand('workbench.view.extension.vibey-sidebar');
     });
 
+
     const settingsCommand = vscode.commands.registerCommand('vibey.openSettings', () => {
         vscode.commands.executeCommand('workbench.action.openSettings', 'vibey');
     });
 
+    const selectModelCommand = vscode.commands.registerCommand('vibey.selectModel', async () => {
+        try {
+            const models = await llm.listModels();
+            if (models.length === 0) {
+                vscode.window.showErrorMessage('No Ollama models found. Is Ollama running?');
+                return;
+            }
+
+            const selected = await vscode.window.showQuickPick(models, {
+                placeHolder: 'Select an Ollama model'
+            });
+
+            if (selected) {
+                await vscode.workspace.getConfiguration('vibey').update('model', selected, vscode.ConfigurationTarget.Global);
+                vscode.window.showInformationMessage(`Vibey model set to: ${selected}`);
+            }
+        } catch (err: any) {
+            vscode.window.showErrorMessage(`Failed to select model: ${err.message}`);
+        }
+    });
+
     context.subscriptions.push(startCommand);
     context.subscriptions.push(settingsCommand);
+    context.subscriptions.push(selectModelCommand);
 }
 
 export function deactivate() { }

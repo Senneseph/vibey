@@ -56,11 +56,27 @@ export class OllamaClient implements LLMProvider {
             }
 
             const data = await response.json() as OllamaResponse;
+
             return data.message.content;
 
         } catch (error) {
             console.error('Failed to call Ollama:', error);
             throw error;
+        }
+    }
+
+    async listModels(): Promise<string[]> {
+        const { baseUrl } = this.getConfig();
+        try {
+            const response = await fetch(`${baseUrl}/api/tags`);
+            if (!response.ok) {
+                throw new Error(`Failed to fetch models: ${response.statusText}`);
+            }
+            const data = await response.json() as { models: { name: string }[] };
+            return data.models.map(m => m.name);
+        } catch (error) {
+            console.error('Failed to list models:', error);
+            return [];
         }
     }
 }
