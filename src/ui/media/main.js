@@ -114,7 +114,12 @@ attachBtn.addEventListener('click', () => {
     vscode.postMessage({ type: 'selectContext' });
 });
 
+
 micBtn.addEventListener('click', toggleSpeech);
+
+document.getElementById('models-btn').addEventListener('click', () => {
+    vscode.postMessage({ type: 'selectModel' });
+});
 
 settingsBtn.addEventListener('click', () => {
     vscode.postMessage({ type: 'openSettings' });

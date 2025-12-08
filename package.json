@@ -2,7 +2,7 @@
     "name": "vibey",
     "displayName": "Vibey",
     "description": "Offline-first AI Coding Agent",
-    "version": "0.0.2",
+    "version": "0.0.3",
     "repository": {
         "type": "git",
         "url": "https://github.com/example/vibey"
@@ -45,6 +45,10 @@
                 "command": "vibey.openSettings",
                 "title": "Vibey Settings",
                 "icon": "$(settings-gear)"
+            },
+            {
+                "command": "vibey.selectModel",
+                "title": "Vibey: Select Model"
             }
         ],
         "viewsContainers": {

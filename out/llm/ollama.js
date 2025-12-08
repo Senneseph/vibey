@@ -46,6 +46,21 @@ class OllamaClient {
             throw error;
         }
     }
+    async listModels() {
+        const { baseUrl } = this.getConfig();
+        try {
+            const response = await fetch(`${baseUrl}/api/tags`);
+            if (!response.ok) {
+                throw new Error(`Failed to fetch models: ${response.statusText}`);
+            }
+            const data = await response.json();
+            return data.models.map(m => m.name);
+        }
+        catch (error) {
+            console.error('Failed to list models:', error);
+            return [];
+        }
+    }
 }
 exports.OllamaClient = OllamaClient;
 //# sourceMappingURL=ollama.js.map

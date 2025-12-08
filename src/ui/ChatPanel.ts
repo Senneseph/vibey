@@ -42,7 +42,7 @@ export class ChatPanel implements vscode.WebviewViewProvider {
                     break;
                 }
                 case 'openSettings': {
-                    vscode.commands.executeCommand('workbench.action.openSettings', 'vibey');
+                    vscode.commands.executeCommand('vibey.openSettings');
                     break;
                 }
                 case 'selectContext': {
@@ -58,6 +58,10 @@ export class ChatPanel implements vscode.WebviewViewProvider {
                             });
                         });
                     }
+                    break;
+                }
+                case 'selectModel': {
+                    vscode.commands.executeCommand('vibey.selectModel');
                     break;
                 }
             }
@@ -87,6 +91,7 @@ export class ChatPanel implements vscode.WebviewViewProvider {
                     <div class="toolbar">
                         <button id="attach-btn" title="Add Context">📎</button>
                         <button id="mic-btn" title="Voice Input">🎤</button>
+                        <button id="models-btn" title="Select Model">🤖</button>
                         <button id="settings-btn" title="Settings">⚙️</button>
                     </div>
                     <button id="send-btn" class="primary">Send ➤</button>
