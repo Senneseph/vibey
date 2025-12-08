@@ -1,167 +1,175 @@
 {
-    "name": "vibey",
-    "displayName": "Vibey",
-    "description": "Offline-first AI Coding Agent",
-    "publisher": "vibey-project",
-    "version": "0.2.2",
-    "repository": {
-        "type": "git",
-        "url": "https://github.com/vibey-project/vibey"
-    },
-    "engines": {
-        "vscode": "^1.90.0"
-    },
-    "categories": [
-        "Other"
-    ],
-    "activationEvents": [],
-    "main": "./out/extension.js",
-    "contributes": {
-        "configuration": {
-            "title": "Vibey",
-            "properties": {
-                "vibey.ollamaUrl": {
-                    "type": "string",
-                    "default": "http://localhost:11434",
-                    "description": "URL of the Ollama API server"
-                },
-                "vibey.model": {
-                    "type": "string",
-                    "default": "Qwen3-coder-roo-config:latest",
-                    "description": "Name of the model to use in Ollama"
-                },
-                "vibey.autoRunTools": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "If true, non-critical tools will run without approval (Use with caution)"
-                },
-                "vibey.maxTurns": {
-                    "type": "number",
-                    "default": 64,
-                    "description": "Maximum number of autonomous turns the agent can take before stopping or summarizing. Increase for complex tasks."
-                },
-                "vibey.mcpServers": {
-                    "type": "object",
-                    "default": {},
-                    "description": "Configure MCP servers. Key is server name, Value is command and arguments (e.g. { \"command\": \"node\", \"args\": [\"server.js\"] })"
-                },
-                "vibey.preferredShell": {
-                    "type": "string",
-                    "enum": [
-                        "auto",
-                        "powershell",
-                        "cmd",
-                        "bash",
-                        "zsh",
-                        "sh",
-                        "fish"
-                    ],
-                    "default": "auto",
-                    "description": "Preferred shell for Vibey terminals. 'auto' uses the system default."
-                },
-                "vibey.terminalHistoryLimit": {
-                    "type": "number",
-                    "default": 500,
-                    "description": "Maximum number of terminal command history entries to preserve."
-                }
-            }
+  "name": "vibey",
+  "displayName": "Vibey",
+  "description": "Offline-first AI Coding Agent",
+  "publisher": "vibey-project",
+  "version": "0.2.2",
+  "icon": "icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vibey-project/vibey"
+  },
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "Vibey",
+      "properties": {
+        "vibey.ollamaUrl": {
+          "type": "string",
+          "default": "http://localhost:11434",
+          "description": "URL of the Ollama API server"
         },
-        "commands": [
-            {
-                "command": "vibey.start",
-                "title": "Vibey: Start Agent"
-            },
-            {
-                "command": "vibey.openSettings",
-                "title": "Vibey Settings",
-                "icon": "$(settings-gear)"
-            },
-            {
-                "command": "vibey.selectModel",
-                "title": "Vibey: Select Model",
-                "icon": "$(server-process)"
-            },
-            {
-                "command": "vibey.mcpStatus",
-                "title": "Vibey: MCP Server Status",
-                "icon": "$(plug)"
-            },
-            {
-                "command": "vibey.mcpReload",
-                "title": "Vibey: Reload MCP Servers",
-                "icon": "$(refresh)"
-            },
-            {
-                "command": "vibey.mcpListTools",
-                "title": "Vibey: List All Tools",
-                "icon": "$(tools)"
-            }
-        ],
-        "viewsContainers": {
-            "activitybar": [
-                {
-                    "id": "vibey-sidebar",
-                    "title": "Vibey",
-                    "icon": "$(robot)"
-                }
-            ],
-            "secondarySidebar": [
-                {
-                    "id": "vibey-auxiliary",
-                    "title": "Vibey",
-                    "icon": "$(robot)"
-                }
-            ]
+        "vibey.model": {
+          "type": "string",
+          "default": "Qwen3-coder-roo-config:latest",
+          "description": "Name of the model to use in Ollama"
         },
-        "views": {
-            "vibey-sidebar": [
-                {
-                    "type": "webview",
-                    "id": "vibey.chatView",
-                    "name": "Chat"
-                }
-            ],
-            "vibey-auxiliary": [
-                {
-                    "type": "webview",
-                    "id": "vibey.chatViewAux",
-                    "name": "Chat"
-                }
-            ]
+        "vibey.autoRunTools": {
+          "type": "boolean",
+          "default": false,
+          "description": "If true, non-critical tools will run without approval (Use with caution)"
         },
-        "menus": {
-            "view/title": [
-                {
-                    "command": "vibey.selectModel",
-                    "when": "view == vibey.chatView || view == vibey.chatViewAux",
-                    "group": "navigation"
-                },
-                {
-                    "command": "vibey.openSettings",
-                    "when": "view == vibey.chatView || view == vibey.chatViewAux",
-                    "group": "navigation"
-                }
-            ]
+        "vibey.maxTurns": {
+          "type": "number",
+          "default": 64,
+          "description": "Maximum number of autonomous turns the agent can take before stopping or summarizing. Increase for complex tasks."
+        },
+        "vibey.mcpServers": {
+          "type": "object",
+          "default": {},
+          "description": "Configure MCP servers. Key is server name, Value is command and arguments (e.g. { \"command\": \"node\", \"args\": [\"server.js\"] })"
+        },
+        "vibey.preferredShell": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "powershell",
+            "cmd",
+            "bash",
+            "zsh",
+            "sh",
+            "fish"
+          ],
+          "default": "auto",
+          "description": "Preferred shell for Vibey terminals. 'auto' uses the system default."
+        },
+        "vibey.terminalHistoryLimit": {
+          "type": "number",
+          "default": 500,
+          "description": "Maximum number of terminal command history entries to preserve."
         }
+      }
     },
-    "scripts": {
-        "vscode:prepublish": "npm run compile",
-        "compile": "tsc -p ./",
-        "watch": "tsc -watch -p ./",
-        "pretest": "npm run compile && npm run lint",
-        "lint": "eslint src --ext ts",
-        "test": "node ./out/test/runTest.js",
-        "package": "vsce package"
+    "commands": [
+      {
+        "command": "vibey.start",
+        "title": "Vibey: Start Agent"
+      },
+      {
+        "command": "vibey.openSettings",
+        "title": "Vibey Settings",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "vibey.selectModel",
+        "title": "Vibey: Select Model",
+        "icon": "$(server-process)"
+      },
+      {
+        "command": "vibey.mcpStatus",
+        "title": "Vibey: MCP Server Status",
+        "icon": "$(plug)"
+      },
+      {
+        "command": "vibey.mcpReload",
+        "title": "Vibey: Reload MCP Servers",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "vibey.mcpListTools",
+        "title": "Vibey: List All Tools",
+        "icon": "$(tools)"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "vibey-sidebar",
+          "title": "Vibey",
+          "icon": "icon.png"
+        },
+        {
+          "id": "vibey-auxiliary",
+          "title": "Vibey Auxiliary",
+          "icon": "icon.png"
+        }
+      ],
+      "secondarySidebar": [
+        {
+          "id": "vibey-auxiliary",
+          "title": "Vibey",
+          "icon": "icon.png"
+        }
+      ]
     },
-    "devDependencies": {
-        "@types/glob": "^8.1.0",
-        "@types/node": "20.x",
-        "@types/vscode": "^1.90.0",
-        "eslint": "^8.57.0",
-        "typescript": "^5.4.5"
+    "views": {
+      "vibey-sidebar": [
+        {
+          "icon": "icon.png",
+          "type": "webview",
+          "id": "vibey.chatView",
+          "name": "Chat"
+        }
+      ],
+      "vibey-auxiliary": [
+        {
+          "icon": "icon.png",
+          "type": "webview",
+          "id": "vibey.chatViewAux",
+          "name": "Chat"
+        }
+      ]
     },
-    "dependencies": {
-        "@modelcontextprotocol/sdk": "^1.24.3",
-        "zod": "^3.23.8"
+    "menus": {
+      "view/title": [
+        {
+          "command": "vibey.selectModel",
+          "when": "view == vibey.chatView || view == vibey.chatViewAux",
+          "group": "navigation"
+        },
+        {
+          "command": "vibey.openSettings",
+          "when": "view == vibey.chatView || view == vibey.chatViewAux",
+          "group": "navigation"
+        }
+      ]
     }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/glob": "^8.1.0",
+    "@types/node": "20.x",
+    "@types/vscode": "^1.90.0",
+    "eslint": "^8.57.0",
+    "typescript": "^5.4.5"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.24.3",
+    "zod": "^3.23.8"
+  }
 }
