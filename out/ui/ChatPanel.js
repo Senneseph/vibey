@@ -64,6 +64,10 @@ class ChatPanel {
                     webviewView.webview.postMessage({ type: 'updateTasks', tasks: tasks });
                     break;
                 }
+                case 'error': {
+                    vscode.window.showErrorMessage(data.message);
+                    break;
+                }
             }
         });
     }
@@ -86,18 +90,22 @@ class ChatPanel {
 
             <div id="chat-view" class="view active">
                 <div id="chat-container"></div>
+
                 <div id="input-area">
                     <div id="context-area"></div>
-                    <textarea id="InputBox" placeholder="Ask Vibey... (Shift+Enter for new line)"></textarea>
-
-                    <div class="controls">
-                        <div class="toolbar">
-                            <button id="attach-btn" title="Add Context">📎</button>
-                            <button id="mic-btn" title="Voice Input">🎤</button>
-                            <button id="models-btn" title="Select Model">🤖</button>
-                            <button id="settings-btn" title="Settings">⚙️</button>
+                    
+                    <div class="input-container">
+                        <textarea id="InputBox" placeholder="Ask Vibey... (Shift+Enter for new line)"></textarea>
+                        
+                        <div class="input-actions">
+                            <div class="toolbar">
+                                <button id="attach-btn" class="icon-btn" title="Add Context">📎</button>
+                                <button id="mic-btn" class="icon-btn" title="Voice Input">🎤</button>
+                                <button id="models-btn" class="icon-btn" title="Select Model">🤖</button>
+                                <button id="settings-btn" class="icon-btn" title="Settings">⚙️</button>
+                            </div>
+                            <button id="send-btn">Send ➤</button>
                         </div>
-                        <button id="send-btn" class="primary">Send ➤</button>
                     </div>
                 </div>
             </div>
