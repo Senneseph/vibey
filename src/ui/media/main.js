@@ -282,43 +282,47 @@ document.querySelectorAll('.tab').forEach(tab => {
     });
 });
 
+// Helper function to render a single message
+function renderMessage(role, content) {
+    const div = document.createElement('div');
+    div.className = `message ${role}`;
+    div.innerHTML = content;
+
+    // Basic thinking block support
+    if (content.includes('<thought>')) {
+        div.innerHTML = content.replace(/<thought>([\s\S]*?)<\/thought>/g,
+            '<details open class="thought-block"><summary>Thinking...</summary><pre>$1</pre></details>');
+    } else {
+        // Formatting for code blocks if not already formatted (basic check)
+        if (!content.includes('<pre>')) {
+            div.innerHTML = content
+                .replace(/\n/g, '<br>')
+                .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
+        }
+    }
+
+    chatContainer.appendChild(div);
+}
+
 // Incoming Messages
 window.addEventListener('message', event => {
     const message = event.data;
     switch (message.type) {
-        case 'addMessage':
-            const div = document.createElement('div');
-            div.className = `message ${message.role}`;
-            div.innerHTML = message.content;
-
-            // Basic thinking block support
-            if (message.content.includes('<thought>')) {
-                div.innerHTML = message.content.replace(/<thought>([\s\S]*?)<\/thought>/g,
-                    '<details open class="thought-block"><summary>Thinking...</summary><pre>$1</pre></details>');
-            } else {
-                // Formatting for code blocks if not already formatted (basic check)
-                if (!message.content.includes('<pre>')) {
-                    div.innerHTML = message.content
-                        .replace(/\n/g, '<br>')
-                        .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
-                }
+        case 'restoreHistory':
+            // Clear existing messages and restore from history
+            chatContainer.innerHTML = '';
+            if (message.messages && Array.isArray(message.messages)) {
+                message.messages.forEach(msg => {
+                    renderMessage(msg.role, msg.content);
+                });
             }
-
-            chatContainer.appendChild(div);
+            // Scroll to bottom after restoring
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+            break;
+        case 'addMessage':
+            renderMessage(message.role, message.content);
             // Auto-scroll
             chatContainer.scrollTop = chatContainer.scrollHeight;
-
-            // Check if this was an assistant message to stop processing state
-            if (message.role === 'assistant' || message.role === 'error') {
-                // Heuristic: If we get an assistant response, we are likely done or waiting for next turn.
-                // But orchestrator sends multiple messages (thoughts, tools). 
-                // We need a specific "processingComplete" or similar, OR we assume assistant text (not tool) ends it?
-                // Actually, `AgentOrchestrator` sends final text response last.
-                // However, tools send intermediate messages.
-                // Let's assume we stay in processing until we get a purely text response that isn't a tool call?
-                // Getting specific "requestComplete" message would be better.
-                // For now, let's keep it simple: We rely on 'requestStopped' or 'requestComplete' (which we need to add to backend)
-            }
             break;
         case 'requestStopped':
             isProcessing = false;
@@ -327,9 +331,6 @@ window.addEventListener('message', event => {
             break;
         case 'requestComplete':
             isProcessing = false;
-            isResumable = false; // Normal completion doesn't trigger resume state, or does it? User said "Only if we type a new message OR the initial request completes should it turn back into blue". 
-            // "If we do have to cancel a request... option... to have gray resume icon."
-            // So normal completion -> Send button (Blue). Cancelled -> Resume button (Gray).
             isResumable = false;
             updateSendButtonState();
             break;
@@ -345,3 +346,6 @@ window.addEventListener('message', event => {
             break;
     }
 });
+
+// Signal to extension that webview is ready to receive messages
+vscode.postMessage({ type: 'webviewReady' });
