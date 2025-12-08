@@ -28,21 +28,35 @@ export function createPatchTools(policy: PolicyEngine, workspaceRoot: string): T
                     throw new Error(`Access Denied by Policy: ${fullPath}`);
                 }
 
-                const existingContent = await fs.readFile(fullPath, 'utf-8');
+                let existingContent = await fs.readFile(fullPath, 'utf-8');
+                let oldStr = params.old_str;
+                let newStr = params.new_str;
 
-                // Check if old_str exists in the file
-                if (!existingContent.includes(params.old_str)) {
-                    throw new Error(`old_str not found in file. Make sure it matches exactly including whitespace.`);
+                // Normalize line endings for matching (handle Windows \r\n vs Unix \n)
+                // First try exact match, then try with normalized line endings
+                let contentToSearch = existingContent;
+                if (!existingContent.includes(oldStr)) {
+                    // Try normalizing both to \n for comparison
+                    contentToSearch = existingContent.replace(/\r\n/g, '\n');
+                    oldStr = oldStr.replace(/\r\n/g, '\n');
+                    newStr = newStr.replace(/\r\n/g, '\n');
+
+                    if (!contentToSearch.includes(oldStr)) {
+                        throw new Error(`old_str not found in file. Make sure it matches exactly including whitespace and indentation.`);
+                    }
+
+                    // Work with normalized content
+                    existingContent = contentToSearch;
                 }
 
                 // Check for multiple occurrences
-                const occurrences = existingContent.split(params.old_str).length - 1;
+                const occurrences = existingContent.split(oldStr).length - 1;
                 if (occurrences > 1) {
                     throw new Error(`old_str found ${occurrences} times. It must be unique. Add more context to make it unique.`);
                 }
 
                 // Perform the replacement
-                const newContent = existingContent.replace(params.old_str, params.new_str);
+                const newContent = existingContent.replace(oldStr, newStr);
                 await fs.writeFile(fullPath, newContent);
 
                 return `Successfully replaced content in ${fullPath}`;
@@ -63,18 +77,27 @@ export function createPatchTools(policy: PolicyEngine, workspaceRoot: string): T
                     throw new Error(`Access Denied by Policy: ${fullPath}`);
                 }
 
-                const existingContent = await fs.readFile(fullPath, 'utf-8');
+                let existingContent = await fs.readFile(fullPath, 'utf-8');
+                let marker = params.marker;
+                let insertContent = params.content;
 
-                if (!existingContent.includes(params.marker)) {
-                    throw new Error(`Marker string not found in file.`);
+                // Normalize line endings for matching
+                if (!existingContent.includes(marker)) {
+                    existingContent = existingContent.replace(/\r\n/g, '\n');
+                    marker = marker.replace(/\r\n/g, '\n');
+                    insertContent = insertContent.replace(/\r\n/g, '\n');
+
+                    if (!existingContent.includes(marker)) {
+                        throw new Error(`Marker string not found in file.`);
+                    }
                 }
 
-                const occurrences = existingContent.split(params.marker).length - 1;
+                const occurrences = existingContent.split(marker).length - 1;
                 if (occurrences > 1) {
                     throw new Error(`Marker found ${occurrences} times. It must be unique.`);
                 }
 
-                const newContent = existingContent.replace(params.marker, params.marker + params.content);
+                const newContent = existingContent.replace(marker, marker + insertContent);
                 await fs.writeFile(fullPath, newContent);
 
                 return `Successfully inserted content after marker in ${fullPath}`;

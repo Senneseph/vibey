@@ -105,34 +105,47 @@ Do not write normal text if you are using a tool. Output ONLY the JSON block.
                 const fencedMatch = responseText.match(/```json[\r\n]+([\s\S]*?)[\r\n]+```/);
 
                 let parsed;
+                let jsonContent: string | null = null;
+
                 if (fencedMatch) {
-                    // Found fenced JSON block
-                    try {
-                        parsed = JSON.parse(fencedMatch[1].trim());
-                    } catch (e) {
-                        // Fenced block exists but isn't valid JSON - return as text
-                        this.context.history.push({ role: 'assistant', content: responseText });
-                        return responseText;
+                    // Found fenced JSON block - extract and clean the content
+                    jsonContent = fencedMatch[1].trim();
+
+                    // Sometimes LLMs duplicate the "json" word inside the block - strip it
+                    if (jsonContent.startsWith('json')) {
+                        jsonContent = jsonContent.slice(4).trim();
                     }
                 } else {
                     // Try to find a JSON object that looks like a tool call
-                    // Look for {"thought": or {"tool_calls": pattern to avoid matching arbitrary JSON in content
-                    const toolCallPattern = /\{\s*"(?:thought|tool_calls)"[\s\S]*\}/;
+                    // Look for {"thought": or {"tool_calls": pattern
+                    const toolCallPattern = /(\{\s*"(?:thought|tool_calls)"[\s\S]*?\})\s*$/;
                     const jsonMatch = responseText.match(toolCallPattern);
 
-                    if (!jsonMatch) {
-                        // No tool call, just a text response.
-                        this.context.history.push({ role: 'assistant', content: responseText });
-                        return responseText;
+                    if (jsonMatch) {
+                        jsonContent = jsonMatch[1];
                     }
+                }
 
-                    try {
-                        parsed = JSON.parse(jsonMatch[0]);
-                    } catch (e) {
-                        // Failed to parse, return raw text
-                        this.context.history.push({ role: 'assistant', content: responseText });
-                        return responseText;
-                    }
+                if (!jsonContent) {
+                    // No tool call, just a text response.
+                    this.context.history.push({ role: 'assistant', content: responseText });
+                    return responseText;
+                }
+
+                // Try to parse the JSON
+                try {
+                    parsed = JSON.parse(jsonContent);
+                } catch (e) {
+                    // JSON parsing failed - this could be truncated or malformed
+                    console.error('[Orchestrator] Failed to parse JSON:', e, 'Content:', jsonContent.substring(0, 200));
+                    this.context.history.push({ role: 'assistant', content: responseText });
+                    return responseText;
+                }
+
+                // Validate that we have a proper tool call structure
+                if (!parsed || typeof parsed !== 'object') {
+                    this.context.history.push({ role: 'assistant', content: responseText });
+                    return responseText;
                 }
 
                 // Emit thought if present
