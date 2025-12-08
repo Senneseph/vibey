@@ -113,27 +113,43 @@ Do not write normal text if you are using a tool. Output ONLY the JSON block.
                 if (signal.aborted)
                     throw new Error('Request cancelled by user');
                 // 3. Parse Response
-                // Check for JSON block
-                const jsonMatch = responseText.match(/```json\n([\s\S]*?)\n```/) || responseText.match(/\{[\s\S]*\}/);
-                if (!jsonMatch) {
-                    // No tool call, just a text response.
-                    this.context.history.push({ role: 'assistant', content: responseText });
-                    return responseText;
-                }
-                // Valid JSON candidate
+                // Check for JSON block - handle both \n and \r\n line endings
+                // First try fenced code block (preferred), then try to find a JSON object
+                const fencedMatch = responseText.match(/```json[\r\n]+([\s\S]*?)[\r\n]+```/);
                 let parsed;
-                try {
-                    const jsonStr = jsonMatch[1] || jsonMatch[0];
-                    parsed = JSON.parse(jsonStr);
-                    // Emit thought if present
-                    if (parsed.thought && onUpdate) {
-                        onUpdate({ type: 'thought', message: parsed.thought });
+                if (fencedMatch) {
+                    // Found fenced JSON block
+                    try {
+                        parsed = JSON.parse(fencedMatch[1].trim());
+                    }
+                    catch (e) {
+                        // Fenced block exists but isn't valid JSON - return as text
+                        this.context.history.push({ role: 'assistant', content: responseText });
+                        return responseText;
                     }
                 }
-                catch (e) {
-                    // Failed to parse, return raw text
-                    this.context.history.push({ role: 'assistant', content: responseText });
-                    return responseText;
+                else {
+                    // Try to find a JSON object that looks like a tool call
+                    // Look for {"thought": or {"tool_calls": pattern to avoid matching arbitrary JSON in content
+                    const toolCallPattern = /\{\s*"(?:thought|tool_calls)"[\s\S]*\}/;
+                    const jsonMatch = responseText.match(toolCallPattern);
+                    if (!jsonMatch) {
+                        // No tool call, just a text response.
+                        this.context.history.push({ role: 'assistant', content: responseText });
+                        return responseText;
+                    }
+                    try {
+                        parsed = JSON.parse(jsonMatch[0]);
+                    }
+                    catch (e) {
+                        // Failed to parse, return raw text
+                        this.context.history.push({ role: 'assistant', content: responseText });
+                        return responseText;
+                    }
+                }
+                // Emit thought if present
+                if (parsed.thought && onUpdate) {
+                    onUpdate({ type: 'thought', message: parsed.thought });
                 }
                 // 4. Execute Tools
                 if (parsed.tool_calls && Array.isArray(parsed.tool_calls)) {
