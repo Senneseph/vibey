@@ -15,6 +15,7 @@ export class ChatPanel implements vscode.WebviewViewProvider {
     private webviewReady: boolean = false;
     private ongoingAgentProcess: { cancel: () => void; reconnect: (onUpdate: (update: any) => void) => void } | null = null;
     private lastAgentUpdate: any = null;
+    private agentUpdatesBuffer: any[] = [];
 
     constructor(
         private readonly _extensionUri: vscode.Uri,
@@ -65,6 +66,8 @@ export class ChatPanel implements vscode.WebviewViewProvider {
                         if (this.ongoingAgentProcess) {
                             this.ongoingAgentProcess.reconnect((update: any) => {
                                 this.lastAgentUpdate = update;
+                                // Also buffer updates for later restoration
+                                this.agentUpdatesBuffer.push(update);
                                 if (this.webviewReady) {
                                     this._view?.webview.postMessage({ type: 'agentUpdate', update });
                                 }
@@ -88,6 +91,7 @@ export class ChatPanel implements vscode.WebviewViewProvider {
                     await this.historyManager.saveHistory(this.currentHistory);
 
                     this.isGenerating = true;
+                    this.agentUpdatesBuffer = []; // Clear buffer for new session
 
                     // Call Agent with Context (Pass data.context)
                     let agentCancelled = false;
@@ -95,6 +99,8 @@ export class ChatPanel implements vscode.WebviewViewProvider {
                         // Track the agent process for reconnection
                         let updateCallback = (update: any) => {
                             this.lastAgentUpdate = update;
+                            // Buffer updates for session preservation
+                            this.agentUpdatesBuffer.push(update);
                             if (this.webviewReady) {
                                 this._view?.webview.postMessage({ type: 'agentUpdate', update });
                             }
@@ -137,6 +143,8 @@ export class ChatPanel implements vscode.WebviewViewProvider {
                         this.isGenerating = false;
                         this.ongoingAgentProcess = null;
                         this.lastAgentUpdate = null;
+                        // Save session after completion
+                        await this.historyManager.saveSession(this.currentHistory);
                     }
                     break;
                 }
@@ -205,7 +213,7 @@ export class ChatPanel implements vscode.WebviewViewProvider {
     }
 
     private _getHtmlForWebview(webview: vscode.Webview) {
-        const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'src', 'ui', 'media', 'main.js')); 
+        const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'src', 'ui', 'media', 'main.js'));
         const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'src', 'ui', 'media', 'main.css'));
 
         return `<!DOCTYPE html>

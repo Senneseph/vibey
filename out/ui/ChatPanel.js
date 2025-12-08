@@ -46,6 +46,7 @@ class ChatPanel {
         this.webviewReady = false;
         this.ongoingAgentProcess = null;
         this.lastAgentUpdate = null;
+        this.agentUpdatesBuffer = [];
     }
     async resolveWebviewView(webviewView, context, _token) {
         this._view = webviewView;
@@ -80,6 +81,8 @@ class ChatPanel {
                         if (this.ongoingAgentProcess) {
                             this.ongoingAgentProcess.reconnect((update) => {
                                 this.lastAgentUpdate = update;
+                                // Also buffer updates for later restoration
+                                this.agentUpdatesBuffer.push(update);
                                 if (this.webviewReady) {
                                     this._view?.webview.postMessage({ type: 'agentUpdate', update });
                                 }
@@ -100,12 +103,15 @@ class ChatPanel {
                     }
                     await this.historyManager.saveHistory(this.currentHistory);
                     this.isGenerating = true;
+                    this.agentUpdatesBuffer = []; // Clear buffer for new session
                     // Call Agent with Context (Pass data.context)
                     let agentCancelled = false;
                     try {
                         // Track the agent process for reconnection
                         let updateCallback = (update) => {
                             this.lastAgentUpdate = update;
+                            // Buffer updates for session preservation
+                            this.agentUpdatesBuffer.push(update);
                             if (this.webviewReady) {
                                 this._view?.webview.postMessage({ type: 'agentUpdate', update });
                             }
@@ -146,6 +152,8 @@ class ChatPanel {
                         this.isGenerating = false;
                         this.ongoingAgentProcess = null;
                         this.lastAgentUpdate = null;
+                        // Save session after completion
+                        await this.historyManager.saveSession(this.currentHistory);
                     }
                     break;
                 }
