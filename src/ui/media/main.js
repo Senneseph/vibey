@@ -9,10 +9,13 @@ const settingsBtn = document.getElementById('settings-btn');
 const micBtn = document.getElementById('mic-btn');
 const contextArea = document.getElementById('context-area');
 
+
 // State
 let contextFiles = [];
 let recognition;
 let isListening = false;
+let isProcessing = false;
+let isResumable = false;
 
 // Initialize Speech Recognition
 if ('webkitSpeechRecognition' in window) {
@@ -34,6 +37,7 @@ if ('webkitSpeechRecognition' in window) {
         const transcript = event.results[0][0].transcript;
         inputBox.value += (inputBox.value ? ' ' : '') + transcript;
         inputBox.focus();
+        updateSendButtonState();
     };
 
     recognition.onerror = (event) => {
@@ -46,6 +50,22 @@ if ('webkitSpeechRecognition' in window) {
     if (micBtn) micBtn.style.display = 'none';
 }
 
+function updateSendButtonState() {
+    if (isProcessing) {
+        sendBtn.textContent = 'Stop 🛑';
+        sendBtn.className = 'stop';
+        sendBtn.title = 'Stop Request';
+    } else if (isResumable && !inputBox.value.trim()) {
+        sendBtn.textContent = 'Resume ↺';
+        sendBtn.className = 'resume';
+        sendBtn.title = 'Resume Request';
+    } else {
+        sendBtn.textContent = 'Send ➤';
+        sendBtn.className = '';
+        sendBtn.title = 'Send Message';
+    }
+}
+
 // Handlers
 function toggleSpeech() {
     if (!recognition) return;
@@ -56,9 +76,47 @@ function toggleSpeech() {
     }
 }
 
+
+let lastMessageText = '';
+let lastContextFiles = [];
+
+function handleSendClick() {
+    if (isProcessing) {
+        // Handle STOP
+        vscode.postMessage({ type: 'stopRequest' });
+        return;
+        sendBtn.textContent = 'Stopping...';
+    } else if (isResumable && !inputBox.value.trim()) {
+        // Handle RESUME - Trigger retry of last
+        // Re-send the last message
+        if (lastMessageText || lastContextFiles.length > 0) {
+            setProcessing(true);
+            vscode.postMessage({
+                type: 'sendMessage',
+                text: lastMessageText,
+                context: lastContextFiles
+            });
+            // We do NOT clear input or context here because we are re-using 'last' state which is already outside UI buffers.
+        } else {
+            // Fallback if nothing to resume?
+            setProcessing(false);
+            isResumable = false;
+            updateSendButtonState();
+        }
+    } else {
+        sendMessage();
+    }
+}
+
 function sendMessage() {
     const text = inputBox.value.trim();
     if (!text && contextFiles.length === 0) return;
+
+    // specific for Resume: store these
+    lastMessageText = text;
+    lastContextFiles = [...contextFiles]; // shallow copy
+
+    setProcessing(true);
 
     vscode.postMessage({
         type: 'sendMessage',
@@ -69,6 +127,12 @@ function sendMessage() {
     inputBox.value = '';
     contextFiles = [];
     renderContext();
+}
+
+function setProcessing(processing) {
+    isProcessing = processing;
+    isResumable = false; // Reset resume state when new request starts
+    updateSendButtonState();
 }
 
 function renderContext() {
@@ -150,14 +214,21 @@ window.onerror = function (message, source, lineno, colno, error) {
     });
 };
 
+
 // Events
-if (sendBtn) sendBtn.addEventListener('click', sendMessage);
+if (sendBtn) sendBtn.addEventListener('click', handleSendClick);
 
 if (inputBox) {
+    inputBox.addEventListener('input', () => {
+        // If user types, we leave "Resume" state and go to "Send" state
+        updateSendButtonState();
+    });
+
     inputBox.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
-            sendMessage();
+            // Enter always attempts to send or resume
+            handleSendClick();
         }
     });
 }
@@ -226,7 +297,33 @@ window.addEventListener('message', event => {
             }
 
             chatContainer.appendChild(div);
+            // Auto-scroll
             chatContainer.scrollTop = chatContainer.scrollHeight;
+
+            // Check if this was an assistant message to stop processing state
+            if (message.role === 'assistant' || message.role === 'error') {
+                // Heuristic: If we get an assistant response, we are likely done or waiting for next turn.
+                // But orchestrator sends multiple messages (thoughts, tools). 
+                // We need a specific "processingComplete" or similar, OR we assume assistant text (not tool) ends it?
+                // Actually, `AgentOrchestrator` sends final text response last.
+                // However, tools send intermediate messages.
+                // Let's assume we stay in processing until we get a purely text response that isn't a tool call?
+                // Getting specific "requestComplete" message would be better.
+                // For now, let's keep it simple: We rely on 'requestStopped' or 'requestComplete' (which we need to add to backend)
+            }
+            break;
+        case 'requestStopped':
+            isProcessing = false;
+            isResumable = true;
+            updateSendButtonState();
+            break;
+        case 'requestComplete':
+            isProcessing = false;
+            isResumable = false; // Normal completion doesn't trigger resume state, or does it? User said "Only if we type a new message OR the initial request completes should it turn back into blue". 
+            // "If we do have to cancel a request... option... to have gray resume icon."
+            // So normal completion -> Send button (Blue). Cancelled -> Resume button (Gray).
+            isResumable = false;
+            updateSendButtonState();
             break;
         case 'appendContext':
             contextFiles.push(message.file);

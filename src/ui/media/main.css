@@ -186,6 +186,7 @@ body {
     background: var(--vscode-toolbar-hoverBackground);
 }
 
+
 #send-btn {
     background: var(--vscode-button-background);
     color: var(--vscode-button-foreground);
@@ -199,6 +200,20 @@ body {
 
 #send-btn:hover {
     background: var(--vscode-button-hoverBackground);
+}
+
+#send-btn.stop {
+    background: var(--vscode-errorForeground);
+    color: white;
+}
+
+#send-btn.stop:hover {
+    opacity: 0.9;
+}
+
+#send-btn.resume {
+    background: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
 }
 
 .context-chip {

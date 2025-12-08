@@ -13,7 +13,7 @@ class OllamaClient {
             baseUrl: config.get('ollamaUrl') || 'http://localhost:11434'
         };
     }
-    async chat(messages) {
+    async chat(messages, signal) {
         const { modelName, baseUrl } = this.getConfig();
         const payload = {
             model: modelName,
@@ -33,7 +33,8 @@ class OllamaClient {
             const response = await fetch(`${baseUrl}/api/chat`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
+                body: JSON.stringify(payload),
+                signal // Pass signal to fetch
             });
             if (!response.ok) {
                 throw new Error(`Ollama API error: ${response.statusText}`);
@@ -42,6 +43,9 @@ class OllamaClient {
             return data.message.content;
         }
         catch (error) {
+            if (error.name === 'AbortError') {
+                throw new Error('Request cancelled by user');
+            }
             console.error('Failed to call Ollama:', error);
             throw error;
         }

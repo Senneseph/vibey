@@ -6,7 +6,16 @@ import { ContextManager, ContextItem } from './context_manager';
 
 export class AgentOrchestrator {
     private context: AgentContext;
+
     private contextManager: ContextManager;
+    private abortController: AbortController | null = null;
+
+    public cancel() {
+        if (this.abortController) {
+            this.abortController.abort();
+            this.abortController = null;
+        }
+    }
 
     constructor(
         private llm: LLMProvider,
@@ -53,94 +62,119 @@ Do not write normal text if you are using a tool. Output ONLY the JSON block.
     }
 
 
+
     async chat(userMessage: string, contextItems?: ContextItem[], onUpdate?: (update: any) => void): Promise<string> {
-        // Resolve context if any
-        let fullMessage = userMessage;
-        if (contextItems && contextItems.length > 0) {
-            const contextBlock = await this.contextManager.resolveContext(contextItems);
-            fullMessage += contextBlock;
+        // Cancel any previous running request
+        if (this.abortController) {
+            this.abortController.abort();
         }
+        this.abortController = new AbortController();
+        const signal = this.abortController.signal;
 
-        // 1. Add user message
-        this.context.history.push({ role: 'user', content: fullMessage });
-
-        let turns = 0;
-        const MAX_TURNS = 10;
-
-        while (turns < MAX_TURNS) {
-            turns++;
-
-            // 2. Call LLM
-            if (onUpdate) onUpdate({ type: 'thinking', message: 'Analyzing request...' });
-
-            const responseText = await this.llm.chat(this.context.history);
-
-            // 3. Parse Response
-            // Check for JSON block
-            const jsonMatch = responseText.match(/```json\n([\s\S]*?)\n```/) || responseText.match(/\{[\s\S]*\}/);
-
-            if (!jsonMatch) {
-                // No tool call, just a text response.
-                this.context.history.push({ role: 'assistant', content: responseText });
-                return responseText;
+        try {
+            // Resolve context if any
+            let fullMessage = userMessage;
+            if (contextItems && contextItems.length > 0) {
+                const contextBlock = await this.contextManager.resolveContext(contextItems);
+                fullMessage += contextBlock;
             }
 
-            // Valid JSON candidate
-            let parsed;
-            try {
-                const jsonStr = jsonMatch[1] || jsonMatch[0];
-                parsed = JSON.parse(jsonStr);
+            // 1. Add user message
+            this.context.history.push({ role: 'user', content: fullMessage });
 
-                // Emit thought if present
-                if (parsed.thought && onUpdate) {
-                    onUpdate({ type: 'thought', message: parsed.thought });
+            let turns = 0;
+            const MAX_TURNS = 10;
+
+
+            while (turns < MAX_TURNS) {
+                if (signal.aborted) throw new Error('Request cancelled by user');
+                turns++;
+
+                // 2. Call LLM
+                if (onUpdate) onUpdate({ type: 'thinking', message: 'Analyzing request...' });
+
+
+                const responseText = await this.llm.chat(this.context.history, signal);
+                if (signal.aborted) throw new Error('Request cancelled by user');
+
+                // 3. Parse Response
+                // Check for JSON block
+                const jsonMatch = responseText.match(/```json\n([\s\S]*?)\n```/) || responseText.match(/\{[\s\S]*\}/);
+
+                if (!jsonMatch) {
+                    // No tool call, just a text response.
+                    this.context.history.push({ role: 'assistant', content: responseText });
+                    return responseText;
                 }
 
-            } catch (e) {
-                // Failed to parse, return raw text
-                this.context.history.push({ role: 'assistant', content: responseText });
-                return responseText;
-            }
+                // Valid JSON candidate
+                let parsed;
+                try {
+                    const jsonStr = jsonMatch[1] || jsonMatch[0];
+                    parsed = JSON.parse(jsonStr);
 
-            // 4. Execute Tools
-            if (parsed.tool_calls && Array.isArray(parsed.tool_calls)) {
-                this.context.history.push({ role: 'assistant', content: responseText });
-
-                // Execute sequentially
-                for (const call of parsed.tool_calls) {
-                    try {
-                        if (onUpdate) onUpdate({ type: 'tool_start', tool: call.name });
-
-                        const result = await this.tools.executeTool(call as ToolCall);
-
-                        if (onUpdate) onUpdate({ type: 'tool_end', tool: call.name, success: true });
-
-                        this.context.history.push({
-                            role: 'tool',
-                            content: JSON.stringify(result)
-                        });
-                    } catch (error: any) {
-                        if (onUpdate) onUpdate({ type: 'tool_end', tool: call.name, success: false, error: error.message });
-
-                        this.context.history.push({
-                            role: 'tool',
-                            content: JSON.stringify({
-                                role: 'tool_result',
-                                tool_call_id: call.id,
-                                status: 'error',
-                                error: error.message
-                            })
-                        });
+                    // Emit thought if present
+                    if (parsed.thought && onUpdate) {
+                        onUpdate({ type: 'thought', message: parsed.thought });
                     }
-                }
-                // Loop continues to let LLM see tool output
-            } else {
-                // Just thought/JSON response without tools
-                this.context.history.push({ role: 'assistant', content: responseText });
-                return parsed.thought || responseText;
-            }
-        }
 
-        return "Max turns reached.";
+                } catch (e) {
+                    // Failed to parse, return raw text
+                    this.context.history.push({ role: 'assistant', content: responseText });
+                    return responseText;
+                }
+
+                // 4. Execute Tools
+                if (parsed.tool_calls && Array.isArray(parsed.tool_calls)) {
+                    this.context.history.push({ role: 'assistant', content: responseText });
+
+                    // Execute sequentially
+
+                    for (const call of parsed.tool_calls) {
+                        if (signal.aborted) throw new Error('Request cancelled by user');
+                        try {
+                            if (onUpdate) onUpdate({ type: 'tool_start', tool: call.name });
+
+                            const result = await this.tools.executeTool(call as ToolCall);
+
+                            if (onUpdate) onUpdate({ type: 'tool_end', tool: call.name, success: true });
+
+                            this.context.history.push({
+                                role: 'tool',
+                                content: JSON.stringify(result)
+                            });
+                        } catch (error: any) {
+                            if (onUpdate) onUpdate({ type: 'tool_end', tool: call.name, success: false, error: error.message });
+
+                            this.context.history.push({
+                                role: 'tool',
+                                content: JSON.stringify({
+                                    role: 'tool_result',
+                                    tool_call_id: call.id,
+                                    status: 'error',
+                                    error: error.message
+                                })
+                            });
+                        }
+                    }
+                    // Loop continues to let LLM see tool output
+                } else {
+                    // Just thought/JSON response without tools
+                    this.context.history.push({ role: 'assistant', content: responseText });
+                    return parsed.thought || responseText;
+                }
+            }
+
+
+            this.abortController = null;
+            return "Max turns reached.";
+        } catch (error: any) {
+            this.abortController = null;
+            if (error.message === 'Request cancelled by user') {
+                return 'Request cancelled.';
+            }
+            throw error;
+
+        }
     }
 }

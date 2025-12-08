@@ -21,7 +21,7 @@ function activate(context) {
     const gateway = new gateway_1.ToolGateway(policy);
     const taskManager = new task_manager_1.TaskManager();
     // Register tools
-    const fsTools = (0, filesystem_1.createFileSystemTools)(policy);
+    const fsTools = (0, filesystem_1.createFileSystemTools)(policy, workspaceRoot);
     fsTools.forEach(t => gateway.registerTool(t));
     gateway.registerTool((0, tasks_1.createManageTaskTool)(taskManager));
     const llm = new ollama_1.OllamaClient();

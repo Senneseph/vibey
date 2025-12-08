@@ -22,8 +22,9 @@ export function activate(context: vscode.ExtensionContext) {
     const gateway = new ToolGateway(policy);
     const taskManager = new TaskManager();
 
+
     // Register tools
-    const fsTools = createFileSystemTools(policy);
+    const fsTools = createFileSystemTools(policy, workspaceRoot);
     fsTools.forEach(t => gateway.registerTool(t));
 
     gateway.registerTool(createManageTaskTool(taskManager));
