@@ -46,7 +46,8 @@ export function activate(context: vscode.ExtensionContext) {
     const llm = new OllamaClient();
     const orchestrator = new AgentOrchestrator(llm, gateway, workspaceRoot);
 
-    const historyManager = new HistoryManager(context);
+
+    const historyManager = new HistoryManager(context, workspaceRoot);
 
     // 2. Register Webview Provider
     const chatProvider = new ChatPanel(context.extensionUri, orchestrator, taskManager, historyManager);

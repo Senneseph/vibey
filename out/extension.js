@@ -33,7 +33,7 @@ function activate(context) {
     terminalTools.forEach(t => gateway.registerTool(t));
     const llm = new ollama_1.OllamaClient();
     const orchestrator = new orchestrator_1.AgentOrchestrator(llm, gateway, workspaceRoot);
-    const historyManager = new history_manager_1.HistoryManager(context);
+    const historyManager = new history_manager_1.HistoryManager(context, workspaceRoot);
     // 2. Register Webview Provider
     const chatProvider = new ChatPanel_1.ChatPanel(context.extensionUri, orchestrator, taskManager, historyManager);
     // Register for Primary Sidebar

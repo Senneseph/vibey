@@ -17,7 +17,8 @@ export class ChatPanel implements vscode.WebviewViewProvider {
         private readonly historyManager: HistoryManager
     ) { }
 
-    public resolveWebviewView(
+
+    public async resolveWebviewView(
         webviewView: vscode.WebviewView,
         context: vscode.WebviewViewResolveContext,
         _token: vscode.CancellationToken,
@@ -32,7 +33,7 @@ export class ChatPanel implements vscode.WebviewViewProvider {
         webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
 
         // Restore History
-        const history = this.historyManager.loadHistory();
+        const history = await this.historyManager.loadHistory();
         if (history.length > 0) {
             history.forEach(msg => {
                 webviewView.webview.postMessage({ type: 'addMessage', role: msg.role, content: msg.content });
@@ -61,10 +62,10 @@ export class ChatPanel implements vscode.WebviewViewProvider {
                         webviewView.webview.postMessage({ type: 'addMessage', role: 'assistant', content: response });
 
                         // Save History
-                        const newHistory = this.historyManager.loadHistory();
+                        const newHistory = await this.historyManager.loadHistory();
                         newHistory.push({ role: 'user', content: data.text });
                         newHistory.push({ role: 'assistant', content: response });
-                        this.historyManager.saveHistory(newHistory);
+                        await this.historyManager.saveHistory(newHistory);
 
                         if (response !== 'Request cancelled.') {
                             webviewView.webview.postMessage({ type: 'requestComplete' });

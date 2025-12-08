@@ -9,7 +9,7 @@ class ChatPanel {
         this.taskManager = taskManager;
         this.historyManager = historyManager;
     }
-    resolveWebviewView(webviewView, context, _token) {
+    async resolveWebviewView(webviewView, context, _token) {
         this._view = webviewView;
         webviewView.webview.options = {
             enableScripts: true,
@@ -17,7 +17,7 @@ class ChatPanel {
         };
         webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
         // Restore History
-        const history = this.historyManager.loadHistory();
+        const history = await this.historyManager.loadHistory();
         if (history.length > 0) {
             history.forEach(msg => {
                 webviewView.webview.postMessage({ type: 'addMessage', role: msg.role, content: msg.content });
@@ -39,10 +39,10 @@ class ChatPanel {
                         const response = await this.orchestrator.chat(data.text, data.context, onUpdate);
                         webviewView.webview.postMessage({ type: 'addMessage', role: 'assistant', content: response });
                         // Save History
-                        const newHistory = this.historyManager.loadHistory();
+                        const newHistory = await this.historyManager.loadHistory();
                         newHistory.push({ role: 'user', content: data.text });
                         newHistory.push({ role: 'assistant', content: response });
-                        this.historyManager.saveHistory(newHistory);
+                        await this.historyManager.saveHistory(newHistory);
                         if (response !== 'Request cancelled.') {
                             webviewView.webview.postMessage({ type: 'requestComplete' });
                         }
