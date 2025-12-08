@@ -59,7 +59,7 @@
                     "icon": "$(robot)"
                 }
             ],
-            "auxiliarybar": [
+            "secondarySidebar": [
                 {
                     "id": "vibey-auxiliary",
                     "title": "Vibey",
