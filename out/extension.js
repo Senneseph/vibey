@@ -14,23 +14,32 @@ function activate(context) {
     // 1. Initialize Components
     const workspaceRoot = vscode.workspace.workspaceFolders
         ? vscode.workspace.workspaceFolders[0].uri.fsPath
-        : process.cwd(); // Fallback if no folder open
+        : process.cwd();
     const policy = new policy_engine_1.PolicyEngine(workspaceRoot);
     const gateway = new gateway_1.ToolGateway(policy);
     // Register tools
     const fsTools = (0, filesystem_1.createFileSystemTools)(policy);
     fsTools.forEach(t => gateway.registerTool(t));
-    const llm = new ollama_1.OllamaClient(); // Defaults to localhost:11434
+    const llm = new ollama_1.OllamaClient();
     const orchestrator = new orchestrator_1.AgentOrchestrator(llm, gateway, workspaceRoot);
     // 2. Register Webview Provider
     const chatProvider = new ChatPanel_1.ChatPanel(context.extensionUri, orchestrator);
+    // Register for Primary Sidebar
     context.subscriptions.push(vscode.window.registerWebviewViewProvider(ChatPanel_1.ChatPanel.viewType, chatProvider));
+    // Register for Auxiliary Sidebar (Secondary)
+    // Note: We reuse the same provider, allowing the user to interact with the same agent instance 
+    // from either view (though state might reset if opened simultaneously depending on VS Code's behavior with same-instance providers,
+    // usually it creates new webviews. ChatPanel handles new webviews in resolveWebviewView).
+    context.subscriptions.push(vscode.window.registerWebviewViewProvider('vibey.chatViewAux', chatProvider));
     // 3. Register Commands
     const startCommand = vscode.commands.registerCommand('vibey.start', () => {
-        // Focus the chat view
         vscode.commands.executeCommand('workbench.view.extension.vibey-sidebar');
     });
+    const settingsCommand = vscode.commands.registerCommand('vibey.openSettings', () => {
+        vscode.commands.executeCommand('workbench.action.openSettings', 'vibey');
+    });
     context.subscriptions.push(startCommand);
+    context.subscriptions.push(settingsCommand);
 }
 function deactivate() { }
 //# sourceMappingURL=extension.js.map

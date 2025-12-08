@@ -2,7 +2,7 @@
     "name": "vibey",
     "displayName": "Vibey",
     "description": "Offline-first AI Coding Agent",
-    "version": "0.0.1",
+    "version": "0.0.2",
     "repository": {
         "type": "git",
         "url": "https://github.com/example/vibey"
@@ -40,12 +40,24 @@
             {
                 "command": "vibey.start",
                 "title": "Vibey: Start Agent"
+            },
+            {
+                "command": "vibey.openSettings",
+                "title": "Vibey Settings",
+                "icon": "$(settings-gear)"
             }
         ],
         "viewsContainers": {
             "activitybar": [
                 {
                     "id": "vibey-sidebar",
+                    "title": "Vibey",
+                    "icon": "$(robot)"
+                }
+            ],
+            "auxiliarybar": [
+                {
+                    "id": "vibey-auxiliary",
                     "title": "Vibey",
                     "icon": "$(robot)"
                 }
@@ -57,6 +69,22 @@
                     "type": "webview",
                     "id": "vibey.chatView",
                     "name": "Chat"
+                }
+            ],
+            "vibey-auxiliary": [
+                {
+                    "type": "webview",
+                    "id": "vibey.chatViewAux",
+                    "name": "Chat"
+                }
+            ]
+        },
+        "menus": {
+            "view/title": [
+                {
+                    "command": "vibey.openSettings",
+                    "when": "view == vibey.chatView || view == vibey.chatViewAux",
+                    "group": "navigation"
                 }
             ]
         }
