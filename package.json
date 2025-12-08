@@ -2,7 +2,7 @@
     "name": "vibey",
     "displayName": "Vibey",
     "description": "Offline-first AI Coding Agent",
-    "version": "0.1.9",
+    "version": "0.2.0",
     "repository": {
         "type": "git",
         "url": "https://github.com/example/vibey"
