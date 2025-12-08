@@ -4,7 +4,10 @@ import { AgentOrchestrator } from './agent/orchestrator';
 import { OllamaClient } from './llm/ollama';
 import { ToolGateway } from './tools/gateway';
 import { PolicyEngine } from './security/policy_engine';
+
 import { createFileSystemTools } from './tools/definitions/filesystem';
+import { createManageTaskTool } from './tools/definitions/tasks';
+import { TaskManager } from './agent/task_manager';
 import { ChatPanel } from './ui/ChatPanel';
 
 export function activate(context: vscode.ExtensionContext) {
@@ -17,16 +20,19 @@ export function activate(context: vscode.ExtensionContext) {
 
     const policy = new PolicyEngine(workspaceRoot);
     const gateway = new ToolGateway(policy);
+    const taskManager = new TaskManager();
 
     // Register tools
     const fsTools = createFileSystemTools(policy);
     fsTools.forEach(t => gateway.registerTool(t));
 
+    gateway.registerTool(createManageTaskTool(taskManager));
+
     const llm = new OllamaClient();
     const orchestrator = new AgentOrchestrator(llm, gateway, workspaceRoot);
 
     // 2. Register Webview Provider
-    const chatProvider = new ChatPanel(context.extensionUri, orchestrator);
+    const chatProvider = new ChatPanel(context.extensionUri, orchestrator, taskManager);
 
     // Register for Primary Sidebar
     context.subscriptions.push(
@@ -34,9 +40,6 @@ export function activate(context: vscode.ExtensionContext) {
     );
 
     // Register for Auxiliary Sidebar (Secondary)
-    // Note: We reuse the same provider, allowing the user to interact with the same agent instance 
-    // from either view (though state might reset if opened simultaneously depending on VS Code's behavior with same-instance providers,
-    // usually it creates new webviews. ChatPanel handles new webviews in resolveWebviewView).
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider('vibey.chatViewAux', chatProvider)
     );

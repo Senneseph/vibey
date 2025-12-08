@@ -7,8 +7,26 @@ export interface AgentContext {
 }
 
 export interface ChatMessage {
-    role: 'user' | 'assistant' | 'system' | 'tool';
-    content: string | ToolCall[] | ToolResult;
+    role: 'system' | 'user' | 'assistant' | 'tool';
+    content: string;
+    toolCalls?: ToolCall[];
+    toolResult?: ToolResult;
+}
+
+export type TaskStatus = 'pending' | 'in-progress' | 'completed' | 'failed';
+
+export interface TaskStep {
+    id: string;
+    description: string;
+    status: TaskStatus;
+}
+
+export interface Task {
+    id: string;
+    title: string;
+    status: TaskStatus;
+    steps: TaskStep[];
+    createdAt: number;
 }
 
 export interface LLMProvider {

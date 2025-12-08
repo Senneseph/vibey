@@ -1,6 +1,7 @@
 
 import * as vscode from 'vscode';
 import { AgentOrchestrator } from '../agent/orchestrator';
+import { TaskManager } from '../agent/task_manager';
 
 export class ChatPanel implements vscode.WebviewViewProvider {
     public static readonly viewType = 'vibey.chatView';
@@ -8,7 +9,8 @@ export class ChatPanel implements vscode.WebviewViewProvider {
 
     constructor(
         private readonly _extensionUri: vscode.Uri,
-        private readonly orchestrator: AgentOrchestrator
+        private readonly orchestrator: AgentOrchestrator,
+        private readonly taskManager: TaskManager
     ) { }
 
     public resolveWebviewView(
@@ -34,7 +36,12 @@ export class ChatPanel implements vscode.WebviewViewProvider {
 
                     // Call Agent with Context (Pass data.context)
                     try {
-                        const response = await this.orchestrator.chat(data.text, data.context);
+                        const onUpdate = (update: any) => {
+                            webviewView.webview.postMessage({ type: 'agentUpdate', update });
+                        };
+
+                        // We will update orchestrator to accept onUpdate
+                        const response = await this.orchestrator.chat(data.text, data.context, onUpdate);
                         webviewView.webview.postMessage({ type: 'addMessage', role: 'assistant', content: response });
                     } catch (e: any) {
                         webviewView.webview.postMessage({ type: 'addMessage', role: 'assistant', content: `Error: ${e.message}` });
@@ -60,8 +67,14 @@ export class ChatPanel implements vscode.WebviewViewProvider {
                     }
                     break;
                 }
+
                 case 'selectModel': {
                     vscode.commands.executeCommand('vibey.selectModel');
+                    break;
+                }
+                case 'getTasks': {
+                    const tasks = this.taskManager.listTasks();
+                    webviewView.webview.postMessage({ type: 'updateTasks', tasks: tasks });
                     break;
                 }
             }
@@ -81,20 +94,33 @@ export class ChatPanel implements vscode.WebviewViewProvider {
             <title>Vibey Chat</title>
         </head>
         <body>
-            <div id="chat-container"></div>
-            
-            <div id="input-area">
-                <div id="context-area"></div>
-                <textarea id="InputBox" placeholder="Ask Vibey... (Shift+Enter for new line)"></textarea>
+            <div class="tabs">
+                <div class="tab active" data-tab="chat">Chat</div>
+                <div class="tab" data-tab="tasks">Tasks</div>
+            </div>
 
-                <div class="controls">
-                    <div class="toolbar">
-                        <button id="attach-btn" title="Add Context">📎</button>
-                        <button id="mic-btn" title="Voice Input">🎤</button>
-                        <button id="models-btn" title="Select Model">🤖</button>
-                        <button id="settings-btn" title="Settings">⚙️</button>
+            <div id="chat-view" class="view active">
+                <div id="chat-container"></div>
+                <div id="input-area">
+                    <div id="context-area"></div>
+                    <textarea id="InputBox" placeholder="Ask Vibey... (Shift+Enter for new line)"></textarea>
+
+                    <div class="controls">
+                        <div class="toolbar">
+                            <button id="attach-btn" title="Add Context">📎</button>
+                            <button id="mic-btn" title="Voice Input">🎤</button>
+                            <button id="models-btn" title="Select Model">🤖</button>
+                            <button id="settings-btn" title="Settings">⚙️</button>
+                        </div>
+                        <button id="send-btn" class="primary">Send ➤</button>
                     </div>
-                    <button id="send-btn" class="primary">Send ➤</button>
+                </div>
+            </div>
+
+            <div id="tasks-view" class="view">
+                <div id="task-list">
+                    <!-- Tasks will be rendered here -->
+                    <div class="empty-state">No active tasks. Ask Vibey to start a task!</div>
                 </div>
             </div>
 
