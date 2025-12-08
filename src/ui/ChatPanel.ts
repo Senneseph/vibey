@@ -1,4 +1,3 @@
-
 import * as vscode from 'vscode';
 import { AgentOrchestrator } from '../agent/orchestrator';
 
@@ -30,19 +29,24 @@ export class ChatPanel implements vscode.WebviewViewProvider {
             localResourceRoots: [this._extensionUri]
         };
 
+        // Pre-load history before setting HTML
+        this.currentHistory = await this.historyManager.loadHistory();
 
         webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
 
-        // Restore History
-        this.currentHistory = await this.historyManager.loadHistory();
-        if (this.currentHistory.length > 0) {
-            this.currentHistory.forEach(msg => {
-                webviewView.webview.postMessage({ type: 'addMessage', role: msg.role, content: msg.content });
-            });
-        }
-
         webviewView.webview.onDidReceiveMessage(async (data) => {
             switch (data.type) {
+                case 'webviewReady': {
+                    // Webview has loaded and is ready to receive messages
+                    // Now send the history
+                    if (this.currentHistory.length > 0) {
+                        webviewView.webview.postMessage({
+                            type: 'restoreHistory',
+                            messages: this.currentHistory
+                        });
+                    }
+                    break;
+                }
                 case 'sendMessage': {
                     if (!data.text) return;
 
