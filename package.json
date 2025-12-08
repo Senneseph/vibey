@@ -2,7 +2,7 @@
     "name": "vibey",
     "displayName": "Vibey",
     "description": "Offline-first AI Coding Agent",
-    "version": "0.1.5",
+    "version": "0.1.6",
     "repository": {
         "type": "git",
         "url": "https://github.com/example/vibey"
@@ -43,6 +43,17 @@
                     "type": "object",
                     "default": {},
                     "description": "Configure MCP servers. Key is server name, Value is command and arguments (e.g. { \"command\": \"node\", \"args\": [\"server.js\"] })"
+                },
+                "vibey.preferredShell": {
+                    "type": "string",
+                    "enum": ["auto", "powershell", "cmd", "bash", "zsh", "sh", "fish"],
+                    "default": "auto",
+                    "description": "Preferred shell for Vibey terminals. 'auto' uses the system default."
+                },
+                "vibey.terminalHistoryLimit": {
+                    "type": "number",
+                    "default": 500,
+                    "description": "Maximum number of terminal command history entries to preserve."
                 }
             }
         },
