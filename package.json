@@ -3,7 +3,7 @@
   "displayName": "Vibey",
   "description": "Offline-first AI Coding Agent",
   "publisher": "vibey-project",
-  "version": "0.2.8",
+  "version": "0.2.9",
   "icon": "icon.png",
   "repository": {
     "type": "git",
