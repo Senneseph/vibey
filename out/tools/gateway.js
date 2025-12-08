@@ -13,6 +13,9 @@ class ToolGateway {
     registerTool(tool) {
         this.tools.set(tool.name, tool);
     }
+    getToolDefinitions() {
+        return Array.from(this.tools.values());
+    }
     async executeTool(call) {
         const tool = this.tools.get(call.name);
         if (!tool) {
