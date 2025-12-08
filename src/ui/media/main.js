@@ -224,12 +224,29 @@ function renderMessage(role, content) {
 
     // Assistant messages might be JSON with thoughts/tools
     if (role === 'assistant') {
-        // Try to parse as JSON
+        // Try to parse as JSON - handle both \n and \r\n line endings
         let parsed = null;
         try {
-            const match = content.match(/```json\n([\s\S]*?)\n```/) || content.match(/^\{[\s\S]*\}$/);
-            if (match) {
-                parsed = JSON.parse(match[1] || match[0]);
+            let jsonContent = null;
+
+            // Try fenced code block first (handles Windows \r\n)
+            const fencedMatch = content.match(/```json[\r\n]+([\s\S]*?)[\r\n]+```/);
+            if (fencedMatch) {
+                jsonContent = fencedMatch[1].trim();
+                // Sometimes LLMs duplicate the "json" word inside the block
+                if (jsonContent.startsWith('json')) {
+                    jsonContent = jsonContent.slice(4).trim();
+                }
+            } else {
+                // Fallback: look for JSON object starting with thought or tool_calls
+                const jsonMatch = content.match(/(\{\s*"(?:thought|tool_calls)"[\s\S]*?\})\s*$/);
+                if (jsonMatch) {
+                    jsonContent = jsonMatch[1];
+                }
+            }
+
+            if (jsonContent) {
+                parsed = JSON.parse(jsonContent);
             }
         } catch (e) { }
 
