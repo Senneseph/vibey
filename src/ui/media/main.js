@@ -181,7 +181,173 @@ function renderTasks(tasks) {
     });
 }
 
+
+// Helper to format tool parameters nicely
+function formatToolParams(name, params) {
+    if (!params) return '';
+
+    // Custom formatting for common tools
+    if (name === 'read_file' || name === 'write_file' || name === 'apply_patch') {
+        let text = `File: <span class="path">${params.path || params.target_file}</span>`;
+        if (params.start_line) text += ` lines ${params.start_line}-${params.end_line || 'end'}`;
+        return text;
+    }
+    if (name === 'run_command' || name === 'terminal_run') {
+        return `Command: <code>${params.command}</code>`;
+    }
+
+    // Default
+    return JSON.stringify(params);
+}
+
+// Helper function to render a single message
+function renderMessage(role, content) {
+    // If it's a tool output (raw JSON result)
+    if (role === 'tool') {
+        // We try to append this to the previous tool block if it exists
+        // But since we are rendering linearly, we might just render a "Result" block
+        // OR better: we don't render 'tool' messages directly as separate bubbles if we can avoid it.
+        // However, looking at history, we have separate messages.
+        // Strategy: Render it as a "Tool Result" block.
+        const div = document.createElement('div');
+        div.className = `message tool-result`;
+        let resultPretty = content;
+        try {
+            const parsed = JSON.parse(content);
+            resultPretty = JSON.stringify(parsed, null, 2);
+        } catch (e) { }
+
+        div.innerHTML = `<details><summary>Tool Output</summary><pre>${resultPretty}</pre></details>`;
+        chatContainer.appendChild(div);
+        return;
+    }
+
+    // Assistant messages might be JSON with thoughts/tools
+    if (role === 'assistant') {
+        // Try to parse as JSON
+        let parsed = null;
+        try {
+            const match = content.match(/```json\n([\s\S]*?)\n```/) || content.match(/^\{[\s\S]*\}$/);
+            if (match) {
+                parsed = JSON.parse(match[1] || match[0]);
+            }
+        } catch (e) { }
+
+        if (parsed) {
+            // Render Thought
+            if (parsed.thought) {
+                const thoughtDiv = document.createElement('div');
+                thoughtDiv.className = 'message system-update';
+                thoughtDiv.innerHTML = `<details open><summary>Thinking Plan</summary><pre>${parsed.thought}</pre></details>`;
+                chatContainer.appendChild(thoughtDiv);
+            }
+
+            // Render Tool Calls
+            if (parsed.tool_calls && Array.isArray(parsed.tool_calls)) {
+                parsed.tool_calls.forEach(call => {
+                    const toolDiv = document.createElement('div');
+                    toolDiv.className = 'message tool-call';
+                    toolDiv.innerHTML = `
+                        <div class="tool-header">
+                            <span class="tool-icon">🛠️</span>
+                            <span class="tool-name">${call.name}</span>
+                            <span class="tool-summary">${formatToolParams(call.name, call.parameters)}</span>
+                        </div>
+                        <details class="tool-details">
+                            <summary>Details</summary>
+                            <pre>${JSON.stringify(call.parameters, null, 2)}</pre>
+                        </details>
+                    `;
+                    chatContainer.appendChild(toolDiv);
+                });
+            }
+
+            // If it was just JSON, we are done. 
+            // Note: If the response had text before/after JSON, we lose it here strictly speaking.
+            // But our agent usually outputs strict JSON or strict Text. 
+            // If strict text (parsed is null), fall through.
+            return;
+        }
+    }
+
+    // Default Text Rendering
+    const div = document.createElement('div');
+    div.className = `message ${role}`;
+    div.innerHTML = content;
+
+    // Basic thinking block support (legacy)
+    if (content.includes('<thought>')) {
+        div.innerHTML = content.replace(/<thought>([\s\S]*?)<\/thought>/g,
+            '<details open class="thought-block"><summary>Thinking...</summary><pre>$1</pre></details>');
+    } else {
+        // Formatting for code blocks
+        if (!content.includes('<pre>')) {
+            div.innerHTML = content
+                .replace(/\n/g, '<br>')
+                .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
+        }
+    }
+
+    chatContainer.appendChild(div);
+}
+
 function handleAgentUpdate(update) {
+    if (update.type === 'tool_start') {
+        const div = document.createElement('div');
+        div.className = 'message tool-call running';
+        div.id = `tool-${update.id}`; // Use ID for updates
+
+        div.innerHTML = `
+            <div class="tool-header">
+                <span class="tool-icon">⏳</span>
+                <span class="tool-name">${update.tool}</span>
+                <span class="tool-summary">${formatToolParams(update.tool, update.parameters)}</span>
+            </div>
+            <details class="tool-details">
+                <summary>Parameters</summary>
+                <pre>${JSON.stringify(update.parameters, null, 2)}</pre>
+            </details>
+        `;
+        chatContainer.appendChild(div);
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+        return;
+    }
+
+    if (update.type === 'tool_end') {
+        const div = document.getElementById(`tool-${update.id}`);
+        if (div) {
+            div.classList.remove('running');
+            div.classList.add(update.success ? 'success' : 'error');
+
+            // Update header icon
+            const icon = div.querySelector('.tool-icon');
+            if (icon) icon.textContent = update.success ? '✅' : '❌';
+
+            // Append result
+            if (update.result || update.error) {
+                const resultText = update.error
+                    ? `Error: ${update.error}`
+                    : (typeof update.result === 'object' ? JSON.stringify(update.result, null, 2) : update.result);
+
+                const resultDetails = document.createElement('details');
+                resultDetails.innerHTML = `<summary>Result</summary><pre>${resultText}</pre>`;
+                div.appendChild(resultDetails);
+            }
+        } else {
+            // Fallback if we missed the start event
+            const fallbackDiv = document.createElement('div');
+            fallbackDiv.className = 'message system-update';
+            fallbackDiv.innerHTML = `<em>${update.success ? '✅' : '❌'} Finished tool: ${update.tool}</em>`;
+            if (update.result) {
+                const resultText = typeof update.result === 'object' ? JSON.stringify(update.result, null, 2) : update.result;
+                fallbackDiv.innerHTML += `<details><summary>Result</summary><pre>${resultText}</pre></details>`;
+            }
+            chatContainer.appendChild(fallbackDiv);
+        }
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+        return;
+    }
+
     const div = document.createElement('div');
     div.className = 'message system-update';
 
@@ -191,23 +357,6 @@ function handleAgentUpdate(update) {
             break;
         case 'thought':
             div.innerHTML = `<details open><summary>Thinking Plan</summary><pre>${update.message}</pre></details>`;
-            break;
-
-        case 'tool_start':
-            div.innerHTML = `<em>🛠️ Running tool: ${update.tool}...</em>`;
-            if (update.parameters) {
-                div.innerHTML += `<details><summary>Parameters</summary><pre>${JSON.stringify(update.parameters, null, 2)}</pre></details>`;
-            }
-            break;
-        case 'tool_end':
-            div.innerHTML = `<em>${update.success ? '✅' : '❌'} Finished tool: ${update.tool}</em>`;
-            if (update.error) {
-                div.innerHTML += `<br><span class="error">Error: ${update.error}</span>`;
-            }
-            if (update.result) {
-                const resultText = typeof update.result === 'object' ? JSON.stringify(update.result, null, 2) : update.result;
-                div.innerHTML += `<details><summary>Result</summary><pre>${resultText}</pre></details>`;
-            }
             break;
     }
     chatContainer.appendChild(div);
@@ -282,27 +431,6 @@ document.querySelectorAll('.tab').forEach(tab => {
     });
 });
 
-// Helper function to render a single message
-function renderMessage(role, content) {
-    const div = document.createElement('div');
-    div.className = `message ${role}`;
-    div.innerHTML = content;
-
-    // Basic thinking block support
-    if (content.includes('<thought>')) {
-        div.innerHTML = content.replace(/<thought>([\s\S]*?)<\/thought>/g,
-            '<details open class="thought-block"><summary>Thinking...</summary><pre>$1</pre></details>');
-    } else {
-        // Formatting for code blocks if not already formatted (basic check)
-        if (!content.includes('<pre>')) {
-            div.innerHTML = content
-                .replace(/\n/g, '<br>')
-                .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
-        }
-    }
-
-    chatContainer.appendChild(div);
-}
 
 // Incoming Messages
 window.addEventListener('message', event => {

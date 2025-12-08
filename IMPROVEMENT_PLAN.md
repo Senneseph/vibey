@@ -1,103 +1,73 @@
 # Vibey Codebase Improvement Plan
 
-## Project Overview
+## Current State Analysis
 
-The goal is to enhance the Vibey VS Code extension to make it fully capable of executing projects for the user, including the ability to improve its own codebase. This involves building upon the existing architecture while adding critical missing components for autonomous project execution.
+The Vibey agent system already has several good foundations:
 
-## Current State Assessment
+1. **History Management**: The `HistoryManager` properly persists chat history to both workspace state and file system
+2. **Tool System**: Well-defined tool architecture with filesystem, patch, terminal, and task management tools
+3. **Vectorization**: Basic vectorization utilities and in-memory vector database
+4. **Task Management**: Task tracking system with status management
+5. **Orchestration**: Agent orchestrator that handles LLM interaction and tool execution
 
-The Vibey system already has a solid foundation with:
-- VS Code extension architecture
-- LLM integration (Ollama)
-- Tool gateway with security policies
-- MCP (Model Context Protocol) integration
-- File system and terminal tools
-- Chat interface
+## Key Improvements Based on User Suggestions
 
-However, it lacks the capability to autonomously improve itself or execute complex projects without human intervention.
+### 1. Preserve Thinking and Command Execution in Chat History
 
-## Critical Missing Components
+The current implementation already has good support for this in `AgentOrchestrator`:
+- Tool calls are logged in the history
+- Thoughts are emitted via onUpdate callback
+- All actions are recorded in the conversation flow
 
-### 1. Project Execution Framework
-- Ability to break down complex tasks into subtasks
-- Multi-step planning and execution
-- Task tracking and status management
-- Resource allocation and dependency handling
+However, we can enhance this by:
+- Adding more detailed metadata to tool execution logs
+- Improving the visualization of thinking processes in the UI
 
-### 2. Self-Improvement Capabilities
-- Code analysis tools to evaluate current implementation
-- Safe modification protocols for self-improvement
-- Version control integration for agent code changes
-- Rollback mechanisms for failed modifications
+### 2. Show Parameters When Executing Tools
 
-### 3. Advanced Reasoning and Planning
-- Meta-reasoning capabilities
-- Performance monitoring and feedback loops
-- Learning from past interactions
-- Pattern recognition across tasks
+The current system shows parameters in the `onUpdate` callback but we can improve:
+- Better formatting of tool parameters in the UI
+- More detailed logging of tool execution
+- Enhanced parameter validation feedback
 
-### 4. Enhanced Tool Ecosystem
-- Git integration tools
-- Build and test command execution
-- Project structure analysis
-- Code search and navigation
+### 3. Patch/Replace Style Implementation (Existing)
 
-## Implementation Roadmap
+The `createPatchTools` function already provides `apply_patch` and `generate_patch` tools. This is exactly what was requested.
 
-### Phase 1: Foundation Enhancement
-1. Implement TaskManager with proper task lifecycle management
-2. Add project planning capabilities
-3. Enhance context management for complex projects
-4. Improve error handling and recovery mechanisms
+### 4. Text Vectorization and Database Exploration
 
-### Phase 2: Self-Improvement Framework
-1. Create code analysis tools
-2. Implement safe modification protocols
-3. Add performance metrics collection
-4. Build feedback loop system
+The system has a basic vectorization utility and in-memory database, but we can enhance it:
+- Implement better vectorization using proper embedding models
+- Add support for external vector databases (Pinecone, Weaviate, etc.)
+- Improve search and retrieval capabilities
 
-### Phase 3: Advanced Capabilities
-1. Add meta-learning capabilities
-2. Implement version control for agent code
-3. Create self-documentation system
-4. Add peer review mechanisms
+## Implementation Plan
 
-## Technical Requirements
+### Phase 1: Enhance History Management
+- Improve parameter logging in tool execution
+- Add more structured metadata to history entries
+- Enhance UI visualization of thinking processes
 
-### Architecture
-- Modular design for easy extension
-- Clear separation of concerns
-- Extensible tool system
-- Secure execution environment
+### Phase 2: Improve Vectorization
+- Replace simple hash-based vectors with proper embeddings
+- Implement external vector database support
+- Add vector search optimization
 
-### Security
-- Strict permission controls
-- Safe execution sandbox
-- Change validation mechanisms
-- Audit trails for modifications
+### Phase 3: Refine Tool Execution
+- Add more detailed tool execution logging
+- Improve parameter validation and error handling
+- Add tool usage statistics
 
-### Integration
-- VS Code extension compatibility
-- Ollama LLM integration
-- MCP protocol support
-- File system access controls
+## Files to Modify
 
-## Success Criteria
+1. `src/agent/orchestrator.ts` - Enhance tool execution logging
+2. `src/agent/vectorization.ts` - Improve vectorization implementation
+3. `src/tools/definitions/patch.ts` - Enhance patch tools
+4. `src/agent/history_manager.ts` - Improve history structure
+5. `src/agent/task_manager.ts` - Enhance task tracking
 
-The enhanced Vibey should be able to:
-1. Execute complex coding projects autonomously
-2. Break down large tasks into manageable steps
-3. Modify its own codebase safely
-4. Learn from past interactions
-5. Maintain security and stability during self-improvement
-6. Provide clear feedback on its reasoning and actions
+## Technical Debt Considerations
 
-## Development Approach
-
-1. Start with task execution improvements
-2. Build upon existing tool framework
-3. Implement security-first self-modification
-4. Add learning and feedback mechanisms
-5. Test thoroughly in controlled environments
-
-This improvement plan should result in a Vibey agent that can handle complex projects autonomously while maintaining safety and security standards.
+- The current vectorization is a placeholder implementation
+- Need to evaluate proper embedding libraries
+- Consider performance implications of vector database integration

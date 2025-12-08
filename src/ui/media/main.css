@@ -110,11 +110,98 @@ body {
     animation: fadeIn 0.3s ease;
 }
 
+
 .message.system-update details {
     background: var(--vscode-textBlockQuote-background);
     padding: 8px;
     border-radius: 4px;
     font-style: normal;
+    margin-top: 4px;
+}
+
+/* Tool Calls (Unified) */
+.message.tool-call {
+    background: var(--vscode-textBlockQuote-background);
+    border: 1px solid var(--vscode-widget-border);
+    border-left: 3px solid var(--vscode-notificationsInfoIcon-foreground);
+    padding: 0;
+    overflow: hidden;
+}
+
+.message.tool-call.running {
+    border-left-color: var(--vscode-progressBar-background);
+}
+
+.message.tool-call.success {
+    border-left-color: var(--vscode-testing-iconPassed);
+}
+
+.message.tool-call.error {
+    border-left-color: var(--vscode-testing-iconFailed);
+}
+
+.tool-header {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    gap: 8px;
+    background: rgba(0, 0, 0, 0.05);
+}
+
+.tool-name {
+    font-weight: bold;
+    font-family: var(--vscode-editor-font-family);
+    font-size: 0.9em;
+}
+
+.tool-summary {
+    flex: 1;
+    font-size: 0.9em;
+    opacity: 0.8;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tool-summary code {
+    background: rgba(0, 0, 0, 0.1);
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-family: var(--vscode-editor-font-family);
+}
+
+.tool-summary .path {
+    font-style: italic;
+    color: var(--vscode-textLink-foreground);
+}
+
+.tool-details {
+    padding: 8px 12px;
+    border-top: 1px solid var(--vscode-widget-border);
+    font-size: 0.85em;
+}
+
+.tool-details summary {
+    cursor: pointer;
+    opacity: 0.7;
+    margin-bottom: 4px;
+}
+
+.tool-details pre {
+    margin: 0;
+    white-space: pre-wrap;
+    font-family: var(--vscode-editor-font-family);
+    background: rgba(0, 0, 0, 0.1);
+    padding: 8px;
+    border-radius: 4px;
+}
+
+/* Standalone Result (Fallback) */
+.message.tool-result {
+    background: var(--vscode-textBlockQuote-background);
+    border-left: 3px solid var(--vscode-textBlockQuote-border);
+    font-family: var(--vscode-editor-font-family);
+    font-size: 0.9em;
 }
 
 /* Unified Input Area */
