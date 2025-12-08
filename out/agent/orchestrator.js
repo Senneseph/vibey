@@ -46,6 +46,9 @@ class AgentOrchestrator {
     constructor(llm, tools, workspaceRoot) {
         this.llm = llm;
         this.tools = tools;
+        /**
+         * Controller for managing request cancellation
+         */
         this.abortController = null;
         this.contextManager = new context_manager_1.ContextManager();
         this.context = {
@@ -81,6 +84,17 @@ Response format:
 }
 \`\`\`
 Do not write normal text if you are using a tool. Output ONLY the JSON block.
+
+## Context Management
+
+This agent implements a hierarchical context management system with shifting windows.
+When working with large projects, the system:
+1. Understands project structure through directory hierarchies
+2. Maintains individual files under 256 lines for optimal processing
+3. Uses a shifting window approach to focus on relevant context
+4. Dynamically adjusts context based on task requirements
+
+For complex tasks, the system will intelligently select and prioritize the most relevant files and directories.
 `;
     }
     async chat(userMessage, contextItems, onUpdate) {
