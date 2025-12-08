@@ -6,9 +6,14 @@ import { ToolGateway } from './tools/gateway';
 import { PolicyEngine } from './security/policy_engine';
 
 import { createFileSystemTools } from './tools/definitions/filesystem';
+
 import { createManageTaskTool } from './tools/definitions/tasks';
 import { TaskManager } from './agent/task_manager';
 import { ChatPanel } from './ui/ChatPanel';
+
+import { TerminalManager } from './agent/terminal_manager';
+import { createTerminalTools } from './tools/definitions/terminal';
+import { HistoryManager } from './agent/history_manager';
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('Vibey is now active!');
@@ -26,17 +31,25 @@ export function activate(context: vscode.ExtensionContext) {
     const taskManager = new TaskManager();
 
 
+
     // Register tools
     const fsTools = createFileSystemTools(policy, workspaceRoot);
     fsTools.forEach(t => gateway.registerTool(t));
 
     gateway.registerTool(createManageTaskTool(taskManager));
 
+    const terminalManager = new TerminalManager(workspaceRoot);
+    const terminalTools = createTerminalTools(terminalManager);
+    terminalTools.forEach(t => gateway.registerTool(t));
+
+
     const llm = new OllamaClient();
     const orchestrator = new AgentOrchestrator(llm, gateway, workspaceRoot);
 
+    const historyManager = new HistoryManager(context);
+
     // 2. Register Webview Provider
-    const chatProvider = new ChatPanel(context.extensionUri, orchestrator, taskManager);
+    const chatProvider = new ChatPanel(context.extensionUri, orchestrator, taskManager, historyManager);
 
     // Register for Primary Sidebar
     context.subscriptions.push(
