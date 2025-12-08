@@ -3,6 +3,10 @@
     "displayName": "Vibey",
     "description": "Offline-first AI Coding Agent",
     "version": "0.0.1",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/example/vibey"
+    },
     "engines": {
         "vscode": "^1.90.0"
     },
