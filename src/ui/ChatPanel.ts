@@ -12,6 +12,7 @@ export class ChatPanel implements vscode.WebviewViewProvider {
 
     private currentHistory: { role: string; content: string }[] = [];
     private isGenerating: boolean = false;
+    private webviewReady: boolean = false;
 
     constructor(
         private readonly _extensionUri: vscode.Uri,
@@ -36,18 +37,22 @@ export class ChatPanel implements vscode.WebviewViewProvider {
 
         webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
 
+        // Set up message handling
         webviewView.webview.onDidReceiveMessage(async (data) => {
             switch (data.type) {
                 case 'webviewReady': {
                     // Webview has loaded and is ready to receive messages
-                    // 1. Restore History
+                    this.webviewReady = true;
+                    
+                    // Restore History
                     if (this.currentHistory.length > 0) {
                         this._view?.webview.postMessage({
                             type: 'restoreHistory',
                             messages: this.currentHistory
                         });
                     }
-                    // 2. Restore State (if mid-generation)
+                    
+                    // Restore State (if mid-generation)
                     if (this.isGenerating) {
                         this._view?.webview.postMessage({ type: 'restoreState', busy: true });
                     }
@@ -59,33 +64,49 @@ export class ChatPanel implements vscode.WebviewViewProvider {
                     // 1. Add User Message & Save Immediately
                     const userMsg = { role: 'user', content: data.text };
                     this.currentHistory.push(userMsg);
-                    this._view?.webview.postMessage({ type: 'addMessage', role: userMsg.role, content: userMsg.content });
+                    
+                    // Only send to UI if webview is ready
+                    if (this.webviewReady) {
+                        this._view?.webview.postMessage({ type: 'addMessage', role: userMsg.role, content: userMsg.content });
+                    }
+                    
                     await this.historyManager.saveHistory(this.currentHistory);
 
                     this.isGenerating = true;
 
                     // Call Agent with Context (Pass data.context)
                     try {
-                        const onUpdate = (update: any) => {
+                        const onUpdate = (update: any) => { 
                             // Helper to send to the CURRENT view, regardless of reload
-                            this._view?.webview.postMessage({ type: 'agentUpdate', update });
+                            if (this.webviewReady) {
+                                this._view?.webview.postMessage({ type: 'agentUpdate', update });
+                            }
                         };
+
 
                         // We will update orchestrator to accept onUpdate
                         const response = await this.orchestrator.chat(data.text, data.context, onUpdate);
 
-                        this._view?.webview.postMessage({ type: 'addMessage', role: 'assistant', content: response });
+                        if (this.webviewReady) {
+                            this._view?.webview.postMessage({ type: 'addMessage', role: 'assistant', content: response });
+                        }
 
                         // 2. Add Assistant Message & Save
                         this.currentHistory.push({ role: 'assistant', content: response });
                         await this.historyManager.saveHistory(this.currentHistory);
 
                         if (response !== 'Request cancelled.') {
-                            this._view?.webview.postMessage({ type: 'requestComplete' });
+                            if (this.webviewReady) {
+                                this._view?.webview.postMessage({ type: 'requestComplete' });
+                            }
                         }
                     } catch (e: any) {
-                        this._view?.webview.postMessage({ type: 'addMessage', role: 'assistant', content: `Error: ${e.message}` });
-                        this._view?.webview.postMessage({ type: 'requestComplete' }); // Even on error we are done
+                        if (this.webviewReady) {
+                            this._view?.webview.postMessage({ type: 'addMessage', role: 'assistant', content: `Error: ${e.message}` });
+                        }
+                        if (this.webviewReady) {
+                            this._view?.webview.postMessage({ type: 'requestComplete' }); // Even on error we are done
+                        }
                     } finally {
                         this.isGenerating = false;
                     }
@@ -102,10 +123,12 @@ export class ChatPanel implements vscode.WebviewViewProvider {
                     });
                     if (uris) {
                         uris.forEach(uri => {
-                            webviewView.webview.postMessage({
-                                type: 'appendContext',
-                                file: { name: uri.path.split('/').pop(), path: uri.fsPath }
-                            });
+                            if (this.webviewReady) {
+                                webviewView.webview.postMessage({
+                                    type: 'appendContext',
+                                    file: { name: uri.path.split('/').pop(), path: uri.fsPath }
+                                });
+                            }
                         });
                     }
                     break;
@@ -114,7 +137,9 @@ export class ChatPanel implements vscode.WebviewViewProvider {
 
                 case 'stopRequest': {
                     this.orchestrator.cancel();
-                    webviewView.webview.postMessage({ type: 'requestStopped' });
+                    if (this.webviewReady) {
+                        webviewView.webview.postMessage({ type: 'requestStopped' });
+                    }
                     break;
                 }
                 case 'retryRequest': {
@@ -138,7 +163,9 @@ export class ChatPanel implements vscode.WebviewViewProvider {
 
                 case 'getTasks': {
                     const tasks = this.taskManager.listTasks();
-                    webviewView.webview.postMessage({ type: 'updateTasks', tasks: tasks });
+                    if (this.webviewReady) {
+                        webviewView.webview.postMessage({ type: 'updateTasks', tasks: tasks });
+                    }
                     break;
                 }
                 case 'error': {
@@ -150,7 +177,7 @@ export class ChatPanel implements vscode.WebviewViewProvider {
     }
 
     private _getHtmlForWebview(webview: vscode.Webview) {
-        const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'src', 'ui', 'media', 'main.js'));
+        const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'src', 'ui', 'media', 'main.js')); 
         const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'src', 'ui', 'media', 'main.css'));
 
         return `<!DOCTYPE html>
