@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AgentOrchestrator = void 0;
+const vscode = require("vscode");
 const context_manager_1 = require("./context_manager");
 class AgentOrchestrator {
     cancel() {
@@ -66,14 +67,15 @@ Do not write normal text if you are using a tool. Output ONLY the JSON block.
             // 1. Add user message
             this.context.history.push({ role: 'user', content: fullMessage });
             let turns = 0;
-            const MAX_TURNS = 10;
+            const config = vscode.workspace.getConfiguration('vibey');
+            const MAX_TURNS = config.get('maxTurns') || 64;
             while (turns < MAX_TURNS) {
                 if (signal.aborted)
                     throw new Error('Request cancelled by user');
                 turns++;
                 // 2. Call LLM
                 if (onUpdate)
-                    onUpdate({ type: 'thinking', message: 'Analyzing request...' });
+                    onUpdate({ type: 'thinking', message: turns === 1 ? 'Analyzing request...' : `Turn ${turns}/${MAX_TURNS}: Reasoning...` });
                 const responseText = await this.llm.chat(this.context.history, signal);
                 if (signal.aborted)
                     throw new Error('Request cancelled by user');
@@ -141,7 +143,16 @@ Do not write normal text if you are using a tool. Output ONLY the JSON block.
                 }
             }
             this.abortController = null;
-            return "Max turns reached.";
+            // Limit reached: Self-Reflection Turn
+            if (onUpdate)
+                onUpdate({ type: 'thinking', message: 'Max turns reached. Summarizing progress...' });
+            this.context.history.push({
+                role: 'user',
+                content: "You have reached the maximum number of turns. Please provide a concise summary of what you have accomplished so far, what issues you encountered, and what steps should be taken next to complete the task."
+            });
+            const summary = await this.llm.chat(this.context.history, signal);
+            this.context.history.push({ role: 'assistant', content: summary });
+            return `**Max Turns Reached (${MAX_TURNS})**\n\n${summary}`;
         }
         catch (error) {
             this.abortController = null;

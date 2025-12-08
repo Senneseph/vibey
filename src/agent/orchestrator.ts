@@ -1,4 +1,6 @@
 
+
+import * as vscode from 'vscode';
 import { AgentContext, LLMProvider } from './types';
 import { ToolGateway } from '../tools/gateway';
 import { ToolCall, ToolDefinition } from '../tools/schema';
@@ -82,8 +84,10 @@ Do not write normal text if you are using a tool. Output ONLY the JSON block.
             // 1. Add user message
             this.context.history.push({ role: 'user', content: fullMessage });
 
+
             let turns = 0;
-            const MAX_TURNS = 10;
+            const config = vscode.workspace.getConfiguration('vibey');
+            const MAX_TURNS = config.get<number>('maxTurns') || 64;
 
 
             while (turns < MAX_TURNS) {
@@ -91,7 +95,7 @@ Do not write normal text if you are using a tool. Output ONLY the JSON block.
                 turns++;
 
                 // 2. Call LLM
-                if (onUpdate) onUpdate({ type: 'thinking', message: 'Analyzing request...' });
+                if (onUpdate) onUpdate({ type: 'thinking', message: turns === 1 ? 'Analyzing request...' : `Turn ${turns}/${MAX_TURNS}: Reasoning...` });
 
 
                 const responseText = await this.llm.chat(this.context.history, signal);
@@ -169,7 +173,19 @@ Do not write normal text if you are using a tool. Output ONLY the JSON block.
 
 
             this.abortController = null;
-            return "Max turns reached.";
+
+            // Limit reached: Self-Reflection Turn
+            if (onUpdate) onUpdate({ type: 'thinking', message: 'Max turns reached. Summarizing progress...' });
+
+            this.context.history.push({
+                role: 'user',
+                content: "You have reached the maximum number of turns. Please provide a concise summary of what you have accomplished so far, what issues you encountered, and what steps should be taken next to complete the task."
+            });
+
+            const summary = await this.llm.chat(this.context.history, signal);
+            this.context.history.push({ role: 'assistant', content: summary });
+
+            return `**Max Turns Reached (${MAX_TURNS})**\n\n${summary}`;
         } catch (error: any) {
             this.abortController = null;
             if (error.message === 'Request cancelled by user') {
