@@ -36,6 +36,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.activate = activate;
 exports.deactivate = deactivate;
 const vscode = __importStar(require("vscode"));
+const path = __importStar(require("path"));
 const orchestrator_1 = require("./agent/orchestrator");
 const ollama_1 = require("./llm/ollama");
 const gateway_1 = require("./tools/gateway");
@@ -44,12 +45,13 @@ const filesystem_1 = require("./tools/definitions/filesystem");
 const tasks_1 = require("./tools/definitions/tasks");
 const task_manager_1 = require("./agent/task_manager");
 const ChatPanel_1 = require("./ui/ChatPanel");
-const terminal_manager_1 = require("./agent/terminal_manager");
-const terminal_1 = require("./tools/definitions/terminal");
+const terminal_1 = require("./agent/terminal");
+const terminal_2 = require("./tools/definitions/terminal");
 const history_manager_1 = require("./agent/history_manager");
 const mcp_service_1 = require("./agent/mcp/mcp_service");
-// Module-level reference for cleanup
+// Module-level references for cleanup
 let mcpService;
+let terminalManager;
 function activate(context) {
     console.log('Vibey is now active!');
     // 1. Initialize Components
@@ -64,8 +66,10 @@ function activate(context) {
     const fsTools = (0, filesystem_1.createFileSystemTools)(policy, workspaceRoot);
     fsTools.forEach(t => gateway.registerTool(t));
     gateway.registerTool((0, tasks_1.createManageTaskTool)(taskManager));
-    const terminalManager = new terminal_manager_1.TerminalManager(workspaceRoot);
-    const terminalTools = (0, terminal_1.createTerminalTools)(terminalManager);
+    // Initialize enhanced terminal manager with custom icon and history persistence
+    const terminalIconPath = path.join(context.extensionPath, 'src', 'ui', 'media', 'vibey-terminal.svg');
+    terminalManager = new terminal_1.VibeyTerminalManager(workspaceRoot, context, terminalIconPath);
+    const terminalTools = (0, terminal_2.createTerminalTools)(terminalManager);
     terminalTools.forEach(t => gateway.registerTool(t));
     // Initialize MCP Service for external tool discovery
     mcpService = new mcp_service_1.McpService(gateway, context);
@@ -158,6 +162,10 @@ async function deactivate() {
     if (mcpService) {
         await mcpService.dispose();
         mcpService = undefined;
+    }
+    if (terminalManager) {
+        terminalManager.dispose();
+        terminalManager = undefined;
     }
 }
 //# sourceMappingURL=extension.js.map

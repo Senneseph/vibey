@@ -1,5 +1,5 @@
-
 import * as vscode from 'vscode';
+import * as path from 'path';
 import { AgentOrchestrator } from './agent/orchestrator';
 import { OllamaClient } from './llm/ollama';
 import { ToolGateway } from './tools/gateway';
@@ -11,13 +11,14 @@ import { createManageTaskTool } from './tools/definitions/tasks';
 import { TaskManager } from './agent/task_manager';
 import { ChatPanel } from './ui/ChatPanel';
 
-import { TerminalManager } from './agent/terminal_manager';
+import { VibeyTerminalManager } from './agent/terminal';
 import { createTerminalTools } from './tools/definitions/terminal';
 import { HistoryManager } from './agent/history_manager';
 import { McpService } from './agent/mcp/mcp_service';
 
-// Module-level reference for cleanup
+// Module-level references for cleanup
 let mcpService: McpService | undefined;
+let terminalManager: VibeyTerminalManager | undefined;
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('Vibey is now active!');
@@ -39,7 +40,9 @@ export function activate(context: vscode.ExtensionContext) {
 
     gateway.registerTool(createManageTaskTool(taskManager));
 
-    const terminalManager = new TerminalManager(workspaceRoot);
+    // Initialize enhanced terminal manager with custom icon and history persistence
+    const terminalIconPath = path.join(context.extensionPath, 'src', 'ui', 'media', 'vibey-terminal.svg');
+    terminalManager = new VibeyTerminalManager(workspaceRoot, context, terminalIconPath);
     const terminalTools = createTerminalTools(terminalManager);
     terminalTools.forEach(t => gateway.registerTool(t));
 
@@ -155,5 +158,9 @@ export async function deactivate() {
     if (mcpService) {
         await mcpService.dispose();
         mcpService = undefined;
+    }
+    if (terminalManager) {
+        terminalManager.dispose();
+        terminalManager = undefined;
     }
 }
