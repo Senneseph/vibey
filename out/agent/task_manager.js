@@ -67,9 +67,10 @@ class TaskManager {
         const task = this.tasks.get(taskId);
         if (task && task.steps[stepIndex]) {
             task.steps[stepIndex].status = status;
-            this.tasks.set(taskId, task); // redundant map set but safe
+            this.tasks.set(taskId, task);
+            return task;
         }
-        return task;
+        return undefined;
     }
     getTask(id) {
         return this.tasks.get(id);
