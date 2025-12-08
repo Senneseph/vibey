@@ -8,6 +8,9 @@ export class AgentOrchestrator {
     private context: AgentContext;
 
     private contextManager: ContextManager;
+    /**
+     * Controller for managing request cancellation
+     */
     private abortController: AbortController | null = null;
 
     public cancel() {
