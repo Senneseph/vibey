@@ -5,6 +5,8 @@
 
 import * as vscode from 'vscode';
 import * as path from 'path';
+import * as fs from 'fs';
+import * as os from 'os';
 import {
     ShellType,
     ShellConfig,
@@ -15,12 +17,13 @@ import {
     CreateTerminalOptions,
     CommandResult,
     TerminalEvent,
-    TerminalEventListener
+    TerminalEventListener,
+    ExecuteCommandOptions
 } from './types';
 
 /** Generate unique terminal ID */
 function generateId(): string {
-    return `vibey-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    return `vibey-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
 }
 
 export class VibeyTerminalManager {
@@ -171,28 +174,240 @@ export class VibeyTerminalManager {
     }
 
     /**
-     * Run a command and wait for output
-     * Note: VS Code terminals don't provide direct output capture.
-     * We use a workaround with shell redirection or rely on sendText + manual check.
+     * Run a command and capture output using best available method:
+     * 1. Shell Integration API (VS Code 1.93+) - preferred
+     * 2. File-based output redirection - fallback
+     * 3. No capture (legacy) - last resort
      */
     public async runCommand(
         command: string,
-        options: CreateTerminalOptions = {}
+        options: ExecuteCommandOptions = {}
     ): Promise<CommandResult> {
         const terminalId = await this.getOrCreateTerminal({ ...options, reuseExisting: true });
+        const terminal = this.terminals.get(terminalId);
         const startTime = Date.now();
 
-        await this.sendCommand(terminalId, command);
+        if (!terminal) {
+            throw new Error(`Terminal ${terminalId} not found`);
+        }
 
-        // Since VS Code terminals don't provide output programmatically,
-        // we return success and the user/LLM should observe the terminal
-        return {
-            success: true,
-            output: `Command sent to terminal. Check terminal "${this.terminalStates.get(terminalId)?.name}" for output.`,
+        if (options.showTerminal !== false) {
+            terminal.show(true);
+        }
+
+        // Try Shell Integration API first (VS Code 1.93+)
+        const shellIntegration = (terminal as any).shellIntegration;
+        if (shellIntegration) {
+            return this.runWithShellIntegration(terminal, terminalId, command, startTime, options.timeout);
+        }
+
+        // Fallback to file-based output capture
+        return this.runWithFileRedirect(terminal, terminalId, command, startTime, options.timeout);
+    }
+
+    /**
+     * Execute command using VS Code Shell Integration API
+     * This provides proper output capture when available
+     */
+    private async runWithShellIntegration(
+        terminal: vscode.Terminal,
+        terminalId: string,
+        command: string,
+        startTime: number,
+        timeout: number = 30000
+    ): Promise<CommandResult> {
+        const shellIntegration = (terminal as any).shellIntegration;
+
+        try {
+            // Execute command via shell integration
+            const execution = shellIntegration.executeCommand(command);
+
+            // Collect output from the stream
+            let output = '';
+            const stream = execution.read();
+
+            // Read with timeout
+            const timeoutPromise = new Promise<never>((_, reject) => {
+                setTimeout(() => reject(new Error('Command timeout')), timeout);
+            });
+
+            const readPromise = (async () => {
+                for await (const data of stream) {
+                    output += data;
+                }
+                return output;
+            })();
+
+            output = await Promise.race([readPromise, timeoutPromise]);
+
+            // Get exit code if available
+            const exitCode = execution.exitCode;
+
+            // Record in history with output
+            const entry: TerminalCommandEntry = {
+                id: generateId(),
+                terminalId,
+                command,
+                executedAt: startTime,
+                output: output.substring(0, 10000), // Limit stored output
+                exitCode,
+                duration: Date.now() - startTime
+            };
+            this.addHistoryEntry(entry);
+
+            this.outputChannel.appendLine(`[Terminal ${terminalId}] Command completed (shell integration)`);
+            this.emitEvent({ type: 'command-completed', terminalId, data: { command, exitCode, output } });
+
+            return {
+                success: exitCode === undefined || exitCode === 0,
+                output,
+                terminalId,
+                command,
+                duration: Date.now() - startTime,
+                exitCode,
+                captureMethod: 'shell_integration'
+            };
+        } catch (error: any) {
+            this.outputChannel.appendLine(`[Terminal ${terminalId}] Shell integration error: ${error.message}`);
+            // Fall back to file redirect
+            return this.runWithFileRedirect(terminal, terminalId, command, startTime, timeout);
+        }
+    }
+
+    /**
+     * Execute command with file-based output redirection
+     * Works on all platforms but requires shell-specific syntax
+     */
+    private async runWithFileRedirect(
+        terminal: vscode.Terminal,
+        terminalId: string,
+        command: string,
+        startTime: number,
+        timeout: number = 30000
+    ): Promise<CommandResult> {
+        const tempDir = os.tmpdir();
+        const outputFile = path.join(tempDir, `vibey-output-${terminalId}-${Date.now()}.txt`);
+        const exitCodeFile = path.join(tempDir, `vibey-exit-${terminalId}-${Date.now()}.txt`);
+
+        const state = this.terminalStates.get(terminalId);
+        const shellType = state?.shellType || 'auto';
+
+        // Build redirect command based on shell type
+        const redirectCommand = this.buildRedirectCommand(command, outputFile, exitCodeFile, shellType);
+
+        // Send the redirected command
+        terminal.sendText(redirectCommand);
+        this.outputChannel.appendLine(`[Terminal ${terminalId}] > ${command} (file redirect)`);
+
+        // Poll for output file with timeout
+        const pollInterval = 100;
+        const maxPolls = timeout / pollInterval;
+        let polls = 0;
+        let output = '';
+        let exitCode: number | undefined;
+
+        while (polls < maxPolls) {
+            await this.sleep(pollInterval);
+            polls++;
+
+            // Check if exit code file exists (indicates command completed)
+            if (fs.existsSync(exitCodeFile)) {
+                try {
+                    const exitCodeStr = fs.readFileSync(exitCodeFile, 'utf-8').trim();
+                    exitCode = parseInt(exitCodeStr, 10);
+                    if (isNaN(exitCode)) exitCode = undefined;
+                } catch { /* ignore */ }
+
+                // Read output
+                if (fs.existsSync(outputFile)) {
+                    try {
+                        output = fs.readFileSync(outputFile, 'utf-8');
+                    } catch { /* ignore */ }
+                }
+
+                // Cleanup temp files
+                this.cleanupTempFiles(outputFile, exitCodeFile);
+                break;
+            }
+        }
+
+        // Record in history
+        const entry: TerminalCommandEntry = {
+            id: generateId(),
             terminalId,
             command,
+            executedAt: startTime,
+            output: output.substring(0, 10000),
+            exitCode,
             duration: Date.now() - startTime
         };
+        this.addHistoryEntry(entry);
+
+        const timedOut = polls >= maxPolls;
+        if (timedOut) {
+            this.cleanupTempFiles(outputFile, exitCodeFile);
+            output = `Command timed out after ${timeout}ms. Check terminal for output.`;
+        }
+
+        this.emitEvent({ type: 'command-completed', terminalId, data: { command, exitCode, output } });
+
+        return {
+            success: !timedOut && (exitCode === undefined || exitCode === 0),
+            output: output || 'No output captured',
+            terminalId,
+            command,
+            duration: Date.now() - startTime,
+            exitCode,
+            captureMethod: 'file_redirect'
+        };
+    }
+
+    /**
+     * Build a command with output redirection based on shell type
+     */
+    private buildRedirectCommand(command: string, outputFile: string, exitCodeFile: string, shellType: ShellType): string {
+        const platform = process.platform;
+
+        // Determine actual shell (for 'auto', guess based on platform)
+        let actualShell = shellType;
+        if (shellType === 'auto') {
+            actualShell = platform === 'win32' ? 'powershell' : 'bash';
+        }
+
+        // Escape paths for the shell
+        const outPath = outputFile.replace(/\\/g, '/');
+        const exitPath = exitCodeFile.replace(/\\/g, '/');
+
+        switch (actualShell) {
+            case 'powershell':
+                // PowerShell: capture output and exit code
+                return `& { ${command} } 2>&1 | Out-File -FilePath "${outPath}" -Encoding utf8; $LASTEXITCODE | Out-File -FilePath "${exitPath}" -Encoding utf8`;
+
+            case 'cmd':
+                // CMD: use > for redirect, %ERRORLEVEL% for exit code
+                return `(${command}) > "${outPath}" 2>&1 & echo %ERRORLEVEL% > "${exitPath}"`;
+
+            case 'bash':
+            case 'zsh':
+            case 'sh':
+            default:
+                // Unix shells: redirect stdout+stderr, capture exit code
+                return `{ ${command}; } > "${outPath}" 2>&1; echo $? > "${exitPath}"`;
+        }
+    }
+
+    private cleanupTempFiles(...files: string[]): void {
+        for (const file of files) {
+            try {
+                if (fs.existsSync(file)) {
+                    fs.unlinkSync(file);
+                }
+            } catch { /* ignore cleanup errors */ }
+        }
+    }
+
+    private sleep(ms: number): Promise<void> {
+        return new Promise(resolve => setTimeout(resolve, ms));
     }
 
     /** Show a terminal */
@@ -244,6 +459,19 @@ export class VibeyTerminalManager {
     /** Get history for a specific terminal */
     public getTerminalHistory(terminalId: string): TerminalCommandEntry[] {
         return this.history.entries.filter(e => e.terminalId === terminalId);
+    }
+
+    /** Get the last command output for a terminal */
+    public getLastOutput(terminalId: string): string | undefined {
+        const terminalHistory = this.getTerminalHistory(terminalId);
+        if (terminalHistory.length === 0) return undefined;
+        return terminalHistory[terminalHistory.length - 1].output;
+    }
+
+    /** Get the last N command outputs for a terminal */
+    public getRecentOutputs(terminalId: string, count: number = 5): TerminalCommandEntry[] {
+        const terminalHistory = this.getTerminalHistory(terminalId);
+        return terminalHistory.slice(-count);
     }
 
     /** Clear history */
