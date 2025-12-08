@@ -192,13 +192,21 @@ function handleAgentUpdate(update) {
         case 'thought':
             div.innerHTML = `<details open><summary>Thinking Plan</summary><pre>${update.message}</pre></details>`;
             break;
+
         case 'tool_start':
             div.innerHTML = `<em>🛠️ Running tool: ${update.tool}...</em>`;
+            if (update.parameters) {
+                div.innerHTML += `<details><summary>Parameters</summary><pre>${JSON.stringify(update.parameters, null, 2)}</pre></details>`;
+            }
             break;
         case 'tool_end':
             div.innerHTML = `<em>${update.success ? '✅' : '❌'} Finished tool: ${update.tool}</em>`;
             if (update.error) {
                 div.innerHTML += `<br><span class="error">Error: ${update.error}</span>`;
+            }
+            if (update.result) {
+                const resultText = typeof update.result === 'object' ? JSON.stringify(update.result, null, 2) : update.result;
+                div.innerHTML += `<details><summary>Result</summary><pre>${resultText}</pre></details>`;
             }
             break;
     }
