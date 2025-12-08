@@ -15,9 +15,10 @@ async function main() {
     const workspaceRoot = process.cwd();
 
     // Setup
+
     const policy = new PolicyEngine(workspaceRoot);
     const gateway = new ToolGateway(policy);
-    createFileSystemTools(policy).forEach(t => gateway.registerTool(t));
+    createFileSystemTools(policy, workspaceRoot).forEach(t => gateway.registerTool(t));
 
     const llm = new OllamaClient();
     const agent = new AgentOrchestrator(llm, gateway, workspaceRoot);

@@ -17,6 +17,7 @@ function activate(context) {
     const workspaceRoot = vscode.workspace.workspaceFolders
         ? vscode.workspace.workspaceFolders[0].uri.fsPath
         : process.cwd();
+    console.log('Vibey Workspace Root:', workspaceRoot);
     const policy = new policy_engine_1.PolicyEngine(workspaceRoot);
     const gateway = new gateway_1.ToolGateway(policy);
     const taskManager = new task_manager_1.TaskManager();

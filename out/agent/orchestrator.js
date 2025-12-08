@@ -109,10 +109,10 @@ Do not write normal text if you are using a tool. Output ONLY the JSON block.
                             throw new Error('Request cancelled by user');
                         try {
                             if (onUpdate)
-                                onUpdate({ type: 'tool_start', tool: call.name });
+                                onUpdate({ type: 'tool_start', tool: call.name, parameters: call.parameters });
                             const result = await this.tools.executeTool(call);
                             if (onUpdate)
-                                onUpdate({ type: 'tool_end', tool: call.name, success: true });
+                                onUpdate({ type: 'tool_end', tool: call.name, success: true, result: result });
                             this.context.history.push({
                                 role: 'tool',
                                 content: JSON.stringify(result)

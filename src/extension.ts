@@ -15,8 +15,11 @@ export function activate(context: vscode.ExtensionContext) {
 
     // 1. Initialize Components
     const workspaceRoot = vscode.workspace.workspaceFolders
+
         ? vscode.workspace.workspaceFolders[0].uri.fsPath
         : process.cwd();
+
+    console.log('Vibey Workspace Root:', workspaceRoot);
 
     const policy = new PolicyEngine(workspaceRoot);
     const gateway = new ToolGateway(policy);

@@ -14,7 +14,7 @@ async function main() {
     // Setup
     const policy = new policy_engine_1.PolicyEngine(workspaceRoot);
     const gateway = new gateway_1.ToolGateway(policy);
-    (0, filesystem_1.createFileSystemTools)(policy).forEach(t => gateway.registerTool(t));
+    (0, filesystem_1.createFileSystemTools)(policy, workspaceRoot).forEach(t => gateway.registerTool(t));
     const llm = new ollama_1.OllamaClient();
     const agent = new orchestrator_1.AgentOrchestrator(llm, gateway, workspaceRoot);
     console.log("---------------------------------------------------");
