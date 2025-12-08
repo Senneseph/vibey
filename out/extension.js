@@ -8,6 +8,8 @@ const ollama_1 = require("./llm/ollama");
 const gateway_1 = require("./tools/gateway");
 const policy_engine_1 = require("./security/policy_engine");
 const filesystem_1 = require("./tools/definitions/filesystem");
+const tasks_1 = require("./tools/definitions/tasks");
+const task_manager_1 = require("./agent/task_manager");
 const ChatPanel_1 = require("./ui/ChatPanel");
 function activate(context) {
     console.log('Vibey is now active!');
@@ -17,19 +19,18 @@ function activate(context) {
         : process.cwd();
     const policy = new policy_engine_1.PolicyEngine(workspaceRoot);
     const gateway = new gateway_1.ToolGateway(policy);
+    const taskManager = new task_manager_1.TaskManager();
     // Register tools
     const fsTools = (0, filesystem_1.createFileSystemTools)(policy);
     fsTools.forEach(t => gateway.registerTool(t));
+    gateway.registerTool((0, tasks_1.createManageTaskTool)(taskManager));
     const llm = new ollama_1.OllamaClient();
     const orchestrator = new orchestrator_1.AgentOrchestrator(llm, gateway, workspaceRoot);
     // 2. Register Webview Provider
-    const chatProvider = new ChatPanel_1.ChatPanel(context.extensionUri, orchestrator);
+    const chatProvider = new ChatPanel_1.ChatPanel(context.extensionUri, orchestrator, taskManager);
     // Register for Primary Sidebar
     context.subscriptions.push(vscode.window.registerWebviewViewProvider(ChatPanel_1.ChatPanel.viewType, chatProvider));
     // Register for Auxiliary Sidebar (Secondary)
-    // Note: We reuse the same provider, allowing the user to interact with the same agent instance 
-    // from either view (though state might reset if opened simultaneously depending on VS Code's behavior with same-instance providers,
-    // usually it creates new webviews. ChatPanel handles new webviews in resolveWebviewView).
     context.subscriptions.push(vscode.window.registerWebviewViewProvider('vibey.chatViewAux', chatProvider));
     // 3. Register Commands
     const startCommand = vscode.commands.registerCommand('vibey.start', () => {
