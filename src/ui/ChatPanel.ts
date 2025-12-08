@@ -1,7 +1,9 @@
 
 import * as vscode from 'vscode';
 import { AgentOrchestrator } from '../agent/orchestrator';
+
 import { TaskManager } from '../agent/task_manager';
+import { HistoryManager } from '../agent/history_manager';
 
 export class ChatPanel implements vscode.WebviewViewProvider {
     public static readonly viewType = 'vibey.chatView';
@@ -9,8 +11,10 @@ export class ChatPanel implements vscode.WebviewViewProvider {
 
     constructor(
         private readonly _extensionUri: vscode.Uri,
+
         private readonly orchestrator: AgentOrchestrator,
-        private readonly taskManager: TaskManager
+        private readonly taskManager: TaskManager,
+        private readonly historyManager: HistoryManager
     ) { }
 
     public resolveWebviewView(
@@ -24,7 +28,16 @@ export class ChatPanel implements vscode.WebviewViewProvider {
             localResourceRoots: [this._extensionUri]
         };
 
+
         webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
+
+        // Restore History
+        const history = this.historyManager.loadHistory();
+        if (history.length > 0) {
+            history.forEach(msg => {
+                webviewView.webview.postMessage({ type: 'addMessage', role: msg.role, content: msg.content });
+            });
+        }
 
         webviewView.webview.onDidReceiveMessage(async (data) => {
             switch (data.type) {
@@ -42,9 +55,16 @@ export class ChatPanel implements vscode.WebviewViewProvider {
 
 
 
+
                         // We will update orchestrator to accept onUpdate
                         const response = await this.orchestrator.chat(data.text, data.context, onUpdate);
                         webviewView.webview.postMessage({ type: 'addMessage', role: 'assistant', content: response });
+
+                        // Save History
+                        const newHistory = this.historyManager.loadHistory();
+                        newHistory.push({ role: 'user', content: data.text });
+                        newHistory.push({ role: 'assistant', content: response });
+                        this.historyManager.saveHistory(newHistory);
 
                         if (response !== 'Request cancelled.') {
                             webviewView.webview.postMessage({ type: 'requestComplete' });

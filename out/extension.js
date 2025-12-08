@@ -11,6 +11,9 @@ const filesystem_1 = require("./tools/definitions/filesystem");
 const tasks_1 = require("./tools/definitions/tasks");
 const task_manager_1 = require("./agent/task_manager");
 const ChatPanel_1 = require("./ui/ChatPanel");
+const terminal_manager_1 = require("./agent/terminal_manager");
+const terminal_1 = require("./tools/definitions/terminal");
+const history_manager_1 = require("./agent/history_manager");
 function activate(context) {
     console.log('Vibey is now active!');
     // 1. Initialize Components
@@ -25,10 +28,14 @@ function activate(context) {
     const fsTools = (0, filesystem_1.createFileSystemTools)(policy, workspaceRoot);
     fsTools.forEach(t => gateway.registerTool(t));
     gateway.registerTool((0, tasks_1.createManageTaskTool)(taskManager));
+    const terminalManager = new terminal_manager_1.TerminalManager(workspaceRoot);
+    const terminalTools = (0, terminal_1.createTerminalTools)(terminalManager);
+    terminalTools.forEach(t => gateway.registerTool(t));
     const llm = new ollama_1.OllamaClient();
     const orchestrator = new orchestrator_1.AgentOrchestrator(llm, gateway, workspaceRoot);
+    const historyManager = new history_manager_1.HistoryManager(context);
     // 2. Register Webview Provider
-    const chatProvider = new ChatPanel_1.ChatPanel(context.extensionUri, orchestrator, taskManager);
+    const chatProvider = new ChatPanel_1.ChatPanel(context.extensionUri, orchestrator, taskManager, historyManager);
     // Register for Primary Sidebar
     context.subscriptions.push(vscode.window.registerWebviewViewProvider(ChatPanel_1.ChatPanel.viewType, chatProvider));
     // Register for Auxiliary Sidebar (Secondary)

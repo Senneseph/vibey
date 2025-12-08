@@ -3,10 +3,11 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.ChatPanel = void 0;
 const vscode = require("vscode");
 class ChatPanel {
-    constructor(_extensionUri, orchestrator, taskManager) {
+    constructor(_extensionUri, orchestrator, taskManager, historyManager) {
         this._extensionUri = _extensionUri;
         this.orchestrator = orchestrator;
         this.taskManager = taskManager;
+        this.historyManager = historyManager;
     }
     resolveWebviewView(webviewView, context, _token) {
         this._view = webviewView;
@@ -15,6 +16,13 @@ class ChatPanel {
             localResourceRoots: [this._extensionUri]
         };
         webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
+        // Restore History
+        const history = this.historyManager.loadHistory();
+        if (history.length > 0) {
+            history.forEach(msg => {
+                webviewView.webview.postMessage({ type: 'addMessage', role: msg.role, content: msg.content });
+            });
+        }
         webviewView.webview.onDidReceiveMessage(async (data) => {
             switch (data.type) {
                 case 'sendMessage': {
@@ -30,6 +38,11 @@ class ChatPanel {
                         // We will update orchestrator to accept onUpdate
                         const response = await this.orchestrator.chat(data.text, data.context, onUpdate);
                         webviewView.webview.postMessage({ type: 'addMessage', role: 'assistant', content: response });
+                        // Save History
+                        const newHistory = this.historyManager.loadHistory();
+                        newHistory.push({ role: 'user', content: data.text });
+                        newHistory.push({ role: 'assistant', content: response });
+                        this.historyManager.saveHistory(newHistory);
                         if (response !== 'Request cancelled.') {
                             webviewView.webview.postMessage({ type: 'requestComplete' });
                         }
