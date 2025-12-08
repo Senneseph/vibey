@@ -1,16 +1,19 @@
 
-import { AgentContext, ChatMessage, LLMProvider } from './types';
+import { AgentContext, LLMProvider } from './types';
 import { ToolGateway } from '../tools/gateway';
 import { ToolCall, ToolDefinition } from '../tools/schema';
+import { ContextManager, ContextItem } from './context_manager';
 
 export class AgentOrchestrator {
     private context: AgentContext;
+    private contextManager: ContextManager;
 
     constructor(
         private llm: LLMProvider,
         private tools: ToolGateway,
         workspaceRoot: string
     ) {
+        this.contextManager = new ContextManager();
         this.context = {
             workspaceRoot,
             history: [
@@ -18,8 +21,6 @@ export class AgentOrchestrator {
             ]
         };
     }
-
-
 
     private getSystemPrompt(): string {
         const toolDefs = this.tools.getToolDefinitions().map((t: ToolDefinition) => {
@@ -51,9 +52,16 @@ Do not write normal text if you are using a tool. Output ONLY the JSON block.
 `;
     }
 
-    async chat(userMessage: string): Promise<string> {
+    async chat(userMessage: string, contextItems?: ContextItem[]): Promise<string> {
+        // Resolve context if any
+        let fullMessage = userMessage;
+        if (contextItems && contextItems.length > 0) {
+            const contextBlock = await this.contextManager.resolveContext(contextItems);
+            fullMessage += contextBlock;
+        }
+
         // 1. Add user message
-        this.context.history.push({ role: 'user', content: userMessage });
+        this.context.history.push({ role: 'user', content: fullMessage });
 
         let turns = 0;
         const MAX_TURNS = 10;

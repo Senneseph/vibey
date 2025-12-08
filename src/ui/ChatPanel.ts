@@ -32,14 +32,31 @@ export class ChatPanel implements vscode.WebviewViewProvider {
                     // Respond immediately (echo)
                     webviewView.webview.postMessage({ type: 'addMessage', role: 'user', content: data.text });
 
-                    // Call Agent
+                    // Call Agent with Context (Pass data.context)
                     try {
-                        const response = await this.orchestrator.chat(data.text);
-                        // In a real app we'd stream this or handle tool outputs piece by piece.
-                        // Here we just send the final answer.
+                        const response = await this.orchestrator.chat(data.text, data.context);
                         webviewView.webview.postMessage({ type: 'addMessage', role: 'assistant', content: response });
                     } catch (e: any) {
                         webviewView.webview.postMessage({ type: 'addMessage', role: 'assistant', content: `Error: ${e.message}` });
+                    }
+                    break;
+                }
+                case 'openSettings': {
+                    vscode.commands.executeCommand('workbench.action.openSettings', 'vibey');
+                    break;
+                }
+                case 'selectContext': {
+                    const uris = await vscode.window.showOpenDialog({
+                        canSelectMany: true,
+                        openLabel: 'Add to Context'
+                    });
+                    if (uris) {
+                        uris.forEach(uri => {
+                            webviewView.webview.postMessage({
+                                type: 'appendContext',
+                                file: { name: uri.path.split('/').pop(), path: uri.fsPath }
+                            });
+                        });
                     }
                     break;
                 }
@@ -48,53 +65,33 @@ export class ChatPanel implements vscode.WebviewViewProvider {
     }
 
     private _getHtmlForWebview(webview: vscode.Webview) {
+        const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'src', 'ui', 'media', 'main.js'));
+        const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'src', 'ui', 'media', 'main.css'));
+
         return `<!DOCTYPE html>
         <html lang="en">
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <link href="${styleUri}" rel="stylesheet">
             <title>Vibey Chat</title>
-             <style>
-                body { font-family: var(--vscode-font-family); padding: 10px; color: var(--vscode-editor-foreground); }
-                .message { margin-bottom: 10px; padding: 5px; border-radius: 4px; }
-                .user { background: var(--vscode-button-background); color: var(--vscode-button-foreground); align-self: flex-end; }
-                .assistant { background: var(--vscode-editor-background); border: 1px solid var(--vscode-widget-border); }
-                #chat { display: flex; flex-direction: column; height: 300px; overflow-y: auto; margin-bottom: 10px; }
-                #input { width: 100%; padding: 5px; box-sizing: border-box; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); }
-            </style>
         </head>
         <body>
-            <h3>Vibey Agent</h3>
-            <div id="chat"></div>
-            <textarea id="input" rows="3" placeholder="Ask me to do something... (ctrl+enter to send)"></textarea>
-            <script>
-                const vscode = acquireVsCodeApi();
-                const chat = document.getElementById('chat');
-                const input = document.getElementById('input');
+            <div id="chat-container"></div>
+            
+            <div id="input-area">
+                <div id="context-area"></div>
+                <textarea id="InputBox" placeholder="Ask Vibey... (Shift+Enter for new line)"></textarea>
+                <div class="controls">
+                    <div class="toolbar">
+                        <button id="attach-btn" title="Add Context">📎</button>
+                        <button id="settings-btn" title="Settings">⚙️</button>
+                    </div>
+                    <button id="send-btn" class="primary">Send ➤</button>
+                </div>
+            </div>
 
-                input.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter' && e.ctrlKey) {
-                        const text = input.value;
-                        if(text) {
-                            vscode.postMessage({ type: 'sendMessage', text: text });
-                            input.value = '';
-                        }
-                    }
-                });
-
-                window.addEventListener('message', event => {
-                    const message = event.data;
-                    switch (message.type) {
-                        case 'addMessage':
-                            const div = document.createElement('div');
-                            div.className = 'message ' + message.role;
-                            div.textContent = message.role.toUpperCase() + ": " + message.content;
-                            chat.appendChild(div);
-                            chat.scrollTop = chat.scrollHeight;
-                            break;
-                    }
-                });
-            </script>
+            <script src="${scriptUri}"></script>
         </body>
         </html>`;
     }
