@@ -89,6 +89,17 @@ export interface CommandResult {
     terminalId: string;
     command: string;
     duration?: number;
+    exitCode?: number;
+    /** How the output was captured */
+    captureMethod?: 'shell_integration' | 'file_redirect' | 'none';
+}
+
+/** Options for executing commands with output capture */
+export interface ExecuteCommandOptions extends CreateTerminalOptions {
+    /** Timeout in milliseconds for waiting for command completion */
+    timeout?: number;
+    /** Whether to show the terminal during execution */
+    showTerminal?: boolean;
 }
 
 /** Terminal event types */

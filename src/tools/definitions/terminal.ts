@@ -31,19 +31,32 @@ export function createTerminalTools(terminal: VibeyTerminalManager): ToolDefinit
         },
         {
             name: 'terminal_run',
-            description: 'Run a command in a Vibey terminal. Reuses existing or creates new.',
+            description: 'Run a command in a Vibey terminal and capture output. Reuses existing or creates new.',
             parameters: z.object({
                 command: z.string().describe('The command to run'),
                 shell: shellTypeSchema.describe('Shell type preference'),
-                newTerminal: z.boolean().optional().describe('Force create a new terminal')
+                newTerminal: z.boolean().optional().describe('Force create a new terminal'),
+                timeout: z.number().optional().describe('Timeout in ms (default 30000)')
             }),
-            execute: async (params: { command: string; shell?: ShellType; newTerminal?: boolean }) => {
+            execute: async (params: { command: string; shell?: ShellType; newTerminal?: boolean; timeout?: number }) => {
                 const result = await terminal.runCommand(params.command, {
                     shellType: params.shell,
-                    reuseExisting: !params.newTerminal
+                    reuseExisting: !params.newTerminal,
+                    timeout: params.timeout
                 });
                 terminal.showTerminal(result.terminalId);
-                return `Ran in terminal ${result.terminalId}: ${params.command}`;
+
+                // Return structured output
+                const response = {
+                    terminalId: result.terminalId,
+                    command: params.command,
+                    success: result.success,
+                    exitCode: result.exitCode,
+                    output: result.output,
+                    captureMethod: result.captureMethod,
+                    duration: result.duration
+                };
+                return JSON.stringify(response, null, 2);
             }
         },
         {
@@ -92,21 +105,66 @@ export function createTerminalTools(terminal: VibeyTerminalManager): ToolDefinit
         },
         {
             name: 'terminal_history',
-            description: 'Get command history for terminals.',
+            description: 'Get command history for terminals including output.',
             parameters: z.object({
                 terminalId: z.string().optional().describe('Filter by terminal ID'),
-                limit: z.number().optional().describe('Max entries (default 20)')
+                limit: z.number().optional().describe('Max entries (default 20)'),
+                includeOutput: z.boolean().optional().describe('Include command output (default false)')
             }),
-            execute: async (params: { terminalId?: string; limit?: number }) => {
+            execute: async (params: { terminalId?: string; limit?: number; includeOutput?: boolean }) => {
                 const limit = params.limit || 20;
                 const entries = params.terminalId
                     ? terminal.getTerminalHistory(params.terminalId)
                     : terminal.getHistory(limit);
                 if (entries.length === 0) return 'No history available.';
+
+                if (params.includeOutput) {
+                    return JSON.stringify(entries.slice(-limit).map(e => ({
+                        time: new Date(e.executedAt).toISOString(),
+                        command: e.command,
+                        output: e.output || null,
+                        exitCode: e.exitCode,
+                        duration: e.duration
+                    })), null, 2);
+                }
+
                 return entries.slice(-limit).map(e => {
                     const time = new Date(e.executedAt).toLocaleTimeString();
                     return `[${time}] ${e.command}`;
                 }).join('\n');
+            }
+        },
+        {
+            name: 'terminal_read_output',
+            description: 'Read the output from the last command(s) in a terminal.',
+            parameters: z.object({
+                terminalId: z.string().describe('The terminal ID to read from'),
+                count: z.number().optional().describe('Number of recent commands to read (default 1)')
+            }),
+            execute: async (params: { terminalId: string; count?: number }) => {
+                const count = params.count || 1;
+                const outputs = terminal.getRecentOutputs(params.terminalId, count);
+
+                if (outputs.length === 0) {
+                    return JSON.stringify({ error: 'No output available for this terminal' });
+                }
+
+                if (count === 1) {
+                    const last = outputs[outputs.length - 1];
+                    return JSON.stringify({
+                        command: last.command,
+                        output: last.output || 'No output captured',
+                        exitCode: last.exitCode,
+                        executedAt: new Date(last.executedAt).toISOString()
+                    }, null, 2);
+                }
+
+                return JSON.stringify(outputs.map(o => ({
+                    command: o.command,
+                    output: o.output || 'No output captured',
+                    exitCode: o.exitCode,
+                    executedAt: new Date(o.executedAt).toISOString()
+                })), null, 2);
             }
         }
     ];
