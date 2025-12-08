@@ -14,87 +14,181 @@ export function createPatchTools(policy: PolicyEngine, workspaceRoot: string): T
 
     return [
         {
-            name: 'apply_patch',
-            description: 'Apply a patch to an existing file. Takes a file path and patch content (diff format).',
+            name: 'str_replace',
+            description: 'Replace a specific string in a file with new content. The old_str must match EXACTLY (including whitespace and indentation). Use this for precise edits.',
             parameters: z.object({
-                path: z.string(),
-                patch: z.string(),
-                contextLines: z.number().optional().default(3)
+                path: z.string().describe('Path to the file to edit'),
+                old_str: z.string().describe('The exact string to find and replace (must match exactly)'),
+                new_str: z.string().describe('The new string to replace old_str with')
             }),
-            execute: async (params: { path: string, patch: string, contextLines?: number }) => {
+            execute: async (params: { path: string, old_str: string, new_str: string }) => {
                 const fullPath = resolvePath(params.path);
-                
+
                 if (!policy.checkPathAccess(fullPath, 'write')) {
                     throw new Error(`Access Denied by Policy: ${fullPath}`);
                 }
-                
-                try {
-                    // Read existing file content
-                    const existingContent = await fs.readFile(fullPath, 'utf-8');
-                    
-                    // Apply patch (simplified implementation)
-                    // In a real implementation, we'd use a proper diff/patch library
-                    const patchedContent = applySimplePatch(existingContent, params.patch);
-                    
-                    // Write back to file
-                    await fs.writeFile(fullPath, patchedContent);
-                    
-                    return `Successfully applied patch to ${fullPath}`;
-                } catch (error) {
-                    throw new Error(`Failed to apply patch to ${fullPath}: ${(error as Error).message}`);
+
+                const existingContent = await fs.readFile(fullPath, 'utf-8');
+
+                // Check if old_str exists in the file
+                if (!existingContent.includes(params.old_str)) {
+                    throw new Error(`old_str not found in file. Make sure it matches exactly including whitespace.`);
                 }
+
+                // Check for multiple occurrences
+                const occurrences = existingContent.split(params.old_str).length - 1;
+                if (occurrences > 1) {
+                    throw new Error(`old_str found ${occurrences} times. It must be unique. Add more context to make it unique.`);
+                }
+
+                // Perform the replacement
+                const newContent = existingContent.replace(params.old_str, params.new_str);
+                await fs.writeFile(fullPath, newContent);
+
+                return `Successfully replaced content in ${fullPath}`;
             }
         },
         {
-            name: 'generate_patch',
-            description: 'Generate a patch for changes to a file. Takes a file path and new content to compare against.',
+            name: 'insert_after',
+            description: 'Insert new content after a specific string in a file. The marker string must match exactly.',
             parameters: z.object({
-                path: z.string(),
-                newContent: z.string()
+                path: z.string().describe('Path to the file to edit'),
+                marker: z.string().describe('The exact string after which to insert new content'),
+                content: z.string().describe('The content to insert after the marker')
             }),
-            execute: async (params: { path: string, newContent: string }) => {
+            execute: async (params: { path: string, marker: string, content: string }) => {
                 const fullPath = resolvePath(params.path);
-                
-                if (!policy.checkPathAccess(fullPath, 'read')) {
+
+                if (!policy.checkPathAccess(fullPath, 'write')) {
                     throw new Error(`Access Denied by Policy: ${fullPath}`);
                 }
-                
-                try {
-                    // Read existing file content
-                    const existingContent = await fs.readFile(fullPath, 'utf-8');
-                    
-                    // Generate patch (simplified implementation)
-                    const patch = generateSimplePatch(existingContent, params.newContent);
-                    
-                    return patch;
-                } catch (error) {
-                    throw new Error(`Failed to generate patch for ${fullPath}: ${(error as Error).message}`);
+
+                const existingContent = await fs.readFile(fullPath, 'utf-8');
+
+                if (!existingContent.includes(params.marker)) {
+                    throw new Error(`Marker string not found in file.`);
                 }
+
+                const occurrences = existingContent.split(params.marker).length - 1;
+                if (occurrences > 1) {
+                    throw new Error(`Marker found ${occurrences} times. It must be unique.`);
+                }
+
+                const newContent = existingContent.replace(params.marker, params.marker + params.content);
+                await fs.writeFile(fullPath, newContent);
+
+                return `Successfully inserted content after marker in ${fullPath}`;
+            }
+        },
+        {
+            name: 'apply_patch',
+            description: 'Apply a unified diff patch to a file. Supports standard unified diff format with @@ line markers.',
+            parameters: z.object({
+                path: z.string(),
+                patch: z.string().describe('Unified diff format patch content')
+            }),
+            execute: async (params: { path: string, patch: string }) => {
+                const fullPath = resolvePath(params.path);
+
+                if (!policy.checkPathAccess(fullPath, 'write')) {
+                    throw new Error(`Access Denied by Policy: ${fullPath}`);
+                }
+
+                const existingContent = await fs.readFile(fullPath, 'utf-8');
+                const patchedContent = applyUnifiedPatch(existingContent, params.patch);
+                await fs.writeFile(fullPath, patchedContent);
+
+                return `Successfully applied patch to ${fullPath}`;
             }
         }
     ];
 }
 
-// Simple patch application (in a real implementation, use a proper diff library)
-function applySimplePatch(content: string, patch: string): string {
-    // This is a simplified implementation
-    // A real implementation would use a library like 'diff' or 'jsdiff'
-    
-    // For now, we'll just return the new content if patch is empty or simple
-    if (!patch || patch.trim() === '') {
-        return content;
-    }
-    
-    // In a real implementation, this would parse the patch and apply it
-    // For now, we'll just return the patch content as a placeholder
-    return content + '\n// Patch applied:\n' + patch;
-}
+/**
+ * Apply a unified diff patch to content
+ * Supports basic unified diff format with @@ -start,count +start,count @@ markers
+ */
+function applyUnifiedPatch(content: string, patch: string): string {
+    const lines = content.split('\n');
+    const patchLines = patch.split('\n');
 
-// Simple patch generation (in a real implementation, use a proper diff library)
-function generateSimplePatch(oldContent: string, newContent: string): string {
-    // This is a simplified implementation
-    // A real implementation would use a library like 'diff' or 'jsdiff'
-    
-    // For now, we'll just return a placeholder indicating what changed
-    return `--- Original\n+++ Modified\n@@ -1,1 +1,1 @@\n ${oldContent.split('\n')[0]}\n+${newContent.split('\n')[0]}`;
+    // Parse hunks from the patch
+    const hunks: Array<{
+        oldStart: number;
+        oldCount: number;
+        newStart: number;
+        newCount: number;
+        changes: Array<{ type: 'context' | 'remove' | 'add'; line: string }>;
+    }> = [];
+
+    let currentHunk: typeof hunks[0] | null = null;
+
+    for (const patchLine of patchLines) {
+        // Skip file headers
+        if (patchLine.startsWith('---') || patchLine.startsWith('+++')) {
+            continue;
+        }
+
+        // Parse hunk header
+        const hunkMatch = patchLine.match(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/);
+        if (hunkMatch) {
+            if (currentHunk) {
+                hunks.push(currentHunk);
+            }
+            currentHunk = {
+                oldStart: parseInt(hunkMatch[1], 10),
+                oldCount: parseInt(hunkMatch[2] || '1', 10),
+                newStart: parseInt(hunkMatch[3], 10),
+                newCount: parseInt(hunkMatch[4] || '1', 10),
+                changes: []
+            };
+            continue;
+        }
+
+        if (currentHunk) {
+            if (patchLine.startsWith('-')) {
+                currentHunk.changes.push({ type: 'remove', line: patchLine.slice(1) });
+            } else if (patchLine.startsWith('+')) {
+                currentHunk.changes.push({ type: 'add', line: patchLine.slice(1) });
+            } else if (patchLine.startsWith(' ') || patchLine === '') {
+                currentHunk.changes.push({ type: 'context', line: patchLine.slice(1) || '' });
+            }
+        }
+    }
+
+    if (currentHunk) {
+        hunks.push(currentHunk);
+    }
+
+    if (hunks.length === 0) {
+        throw new Error('No valid hunks found in patch. Use unified diff format with @@ markers.');
+    }
+
+    // Apply hunks in reverse order to preserve line numbers
+    const result = [...lines];
+    for (const hunk of hunks.reverse()) {
+        const startIndex = hunk.oldStart - 1; // Convert to 0-based
+        let removeCount = 0;
+        const addLines: string[] = [];
+
+        for (const change of hunk.changes) {
+            if (change.type === 'remove' || change.type === 'context') {
+                removeCount++;
+            }
+            if (change.type === 'add' || change.type === 'context') {
+                addLines.push(change.line);
+            }
+        }
+
+        // Only count actual removals, not context lines
+        const actualRemoves = hunk.changes.filter(c => c.type === 'remove').length;
+        const actualAdds = hunk.changes.filter(c => c.type === 'add').map(c => c.line);
+
+        // Find the context and apply changes
+        result.splice(startIndex, hunk.oldCount, ...actualAdds.concat(
+            hunk.changes.filter(c => c.type === 'context').map(c => c.line)
+        ));
+    }
+
+    return result.join('\n');
 }

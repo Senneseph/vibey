@@ -33,14 +33,26 @@ export class ResponseFormatter {
      * @returns boolean indicating if tool calls are present
      */
     static hasToolCalls(responseText: string): boolean {
-        // Check for JSON block with tool_calls
-        const jsonMatch = responseText.match(/```json\n([\s\S]*?)\n```/) || responseText.match(/\{[\s\S]*\}/);
-        
+        // Check for fenced JSON block first (handles both \n and \r\n)
+        const fencedMatch = responseText.match(/```json[\r\n]+([\s\S]*?)[\r\n]+```/);
+
+        if (fencedMatch) {
+            try {
+                const parsed = JSON.parse(fencedMatch[1].trim());
+                return !!parsed.tool_calls;
+            } catch (e) {
+                return false;
+            }
+        }
+
+        // Fallback: look for JSON object with tool_calls key
+        const toolCallPattern = /\{\s*"(?:thought|tool_calls)"[\s\S]*\}/;
+        const jsonMatch = responseText.match(toolCallPattern);
+
         if (!jsonMatch) return false;
-        
+
         try {
-            const jsonStr = jsonMatch[1] || jsonMatch[0];
-            const parsed = JSON.parse(jsonStr);
+            const parsed = JSON.parse(jsonMatch[0]);
             return !!parsed.tool_calls;
         } catch (e) {
             return false;
