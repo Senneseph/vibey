@@ -13,6 +13,8 @@ export class ChatPanel implements vscode.WebviewViewProvider {
     private currentHistory: { role: string; content: string }[] = [];
     private isGenerating: boolean = false;
     private webviewReady: boolean = false;
+    private ongoingAgentProcess: { cancel: () => void; reconnect: (onUpdate: (update: any) => void) => void } | null = null;
+    private lastAgentUpdate: any = null;
 
     constructor(
         private readonly _extensionUri: vscode.Uri,
@@ -43,7 +45,7 @@ export class ChatPanel implements vscode.WebviewViewProvider {
                 case 'webviewReady': {
                     // Webview has loaded and is ready to receive messages
                     this.webviewReady = true;
-                    
+
                     // Restore History
                     if (this.currentHistory.length > 0) {
                         this._view?.webview.postMessage({
@@ -51,10 +53,23 @@ export class ChatPanel implements vscode.WebviewViewProvider {
                             messages: this.currentHistory
                         });
                     }
-                    
+
                     // Restore State (if mid-generation)
                     if (this.isGenerating) {
                         this._view?.webview.postMessage({ type: 'restoreState', busy: true });
+                        // Restore last agent update if available
+                        if (this.lastAgentUpdate) {
+                            this._view?.webview.postMessage({ type: 'agentUpdate', update: this.lastAgentUpdate });
+                        }
+                        // Reconnect to ongoing agent process to resume streaming updates
+                        if (this.ongoingAgentProcess) {
+                            this.ongoingAgentProcess.reconnect((update: any) => {
+                                this.lastAgentUpdate = update;
+                                if (this.webviewReady) {
+                                    this._view?.webview.postMessage({ type: 'agentUpdate', update });
+                                }
+                            });
+                        }
                     }
                     break;
                 }
@@ -64,28 +79,39 @@ export class ChatPanel implements vscode.WebviewViewProvider {
                     // 1. Add User Message & Save Immediately
                     const userMsg = { role: 'user', content: data.text };
                     this.currentHistory.push(userMsg);
-                    
+
                     // Only send to UI if webview is ready
                     if (this.webviewReady) {
                         this._view?.webview.postMessage({ type: 'addMessage', role: userMsg.role, content: userMsg.content });
                     }
-                    
+
                     await this.historyManager.saveHistory(this.currentHistory);
 
                     this.isGenerating = true;
 
                     // Call Agent with Context (Pass data.context)
+                    let agentCancelled = false;
                     try {
-                        const onUpdate = (update: any) => { 
-                            // Helper to send to the CURRENT view, regardless of reload
+                        // Track the agent process for reconnection
+                        let updateCallback = (update: any) => {
+                            this.lastAgentUpdate = update;
                             if (this.webviewReady) {
                                 this._view?.webview.postMessage({ type: 'agentUpdate', update });
                             }
                         };
 
+                        // Wrap the orchestrator call so we can reconnect later
+                        let reconnect = (cb: (update: any) => void) => {
+                            updateCallback = cb;
+                        };
+                        this.ongoingAgentProcess = {
+                            cancel: () => { agentCancelled = true; this.orchestrator.cancel(); },
+                            reconnect
+                        };
 
-                        // We will update orchestrator to accept onUpdate
-                        const response = await this.orchestrator.chat(data.text, data.context, onUpdate);
+                        const response = await this.orchestrator.chat(data.text, data.context, (update: any) => {
+                            if (!agentCancelled) updateCallback(update);
+                        });
 
                         if (this.webviewReady) {
                             this._view?.webview.postMessage({ type: 'addMessage', role: 'assistant', content: response });
@@ -109,6 +135,8 @@ export class ChatPanel implements vscode.WebviewViewProvider {
                         }
                     } finally {
                         this.isGenerating = false;
+                        this.ongoingAgentProcess = null;
+                        this.lastAgentUpdate = null;
                     }
                     break;
                 }

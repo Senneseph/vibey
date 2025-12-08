@@ -44,6 +44,8 @@ class ChatPanel {
         this.currentHistory = [];
         this.isGenerating = false;
         this.webviewReady = false;
+        this.ongoingAgentProcess = null;
+        this.lastAgentUpdate = null;
     }
     async resolveWebviewView(webviewView, context, _token) {
         this._view = webviewView;
@@ -70,6 +72,19 @@ class ChatPanel {
                     // Restore State (if mid-generation)
                     if (this.isGenerating) {
                         this._view?.webview.postMessage({ type: 'restoreState', busy: true });
+                        // Restore last agent update if available
+                        if (this.lastAgentUpdate) {
+                            this._view?.webview.postMessage({ type: 'agentUpdate', update: this.lastAgentUpdate });
+                        }
+                        // Reconnect to ongoing agent process to resume streaming updates
+                        if (this.ongoingAgentProcess) {
+                            this.ongoingAgentProcess.reconnect((update) => {
+                                this.lastAgentUpdate = update;
+                                if (this.webviewReady) {
+                                    this._view?.webview.postMessage({ type: 'agentUpdate', update });
+                                }
+                            });
+                        }
                     }
                     break;
                 }
@@ -86,15 +101,27 @@ class ChatPanel {
                     await this.historyManager.saveHistory(this.currentHistory);
                     this.isGenerating = true;
                     // Call Agent with Context (Pass data.context)
+                    let agentCancelled = false;
                     try {
-                        const onUpdate = (update) => {
-                            // Helper to send to the CURRENT view, regardless of reload
+                        // Track the agent process for reconnection
+                        let updateCallback = (update) => {
+                            this.lastAgentUpdate = update;
                             if (this.webviewReady) {
                                 this._view?.webview.postMessage({ type: 'agentUpdate', update });
                             }
                         };
-                        // We will update orchestrator to accept onUpdate
-                        const response = await this.orchestrator.chat(data.text, data.context, onUpdate);
+                        // Wrap the orchestrator call so we can reconnect later
+                        let reconnect = (cb) => {
+                            updateCallback = cb;
+                        };
+                        this.ongoingAgentProcess = {
+                            cancel: () => { agentCancelled = true; this.orchestrator.cancel(); },
+                            reconnect
+                        };
+                        const response = await this.orchestrator.chat(data.text, data.context, (update) => {
+                            if (!agentCancelled)
+                                updateCallback(update);
+                        });
                         if (this.webviewReady) {
                             this._view?.webview.postMessage({ type: 'addMessage', role: 'assistant', content: response });
                         }
@@ -117,6 +144,8 @@ class ChatPanel {
                     }
                     finally {
                         this.isGenerating = false;
+                        this.ongoingAgentProcess = null;
+                        this.lastAgentUpdate = null;
                     }
                     break;
                 }
