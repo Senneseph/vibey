@@ -42,6 +42,7 @@ const ollama_1 = require("./llm/ollama");
 const gateway_1 = require("./tools/gateway");
 const policy_engine_1 = require("./security/policy_engine");
 const filesystem_1 = require("./tools/definitions/filesystem");
+const patch_1 = require("./tools/definitions/patch");
 const tasks_1 = require("./tools/definitions/tasks");
 const task_manager_1 = require("./agent/task_manager");
 const ChatPanel_1 = require("./ui/ChatPanel");
@@ -65,6 +66,9 @@ function activate(context) {
     // Register built-in tools
     const fsTools = (0, filesystem_1.createFileSystemTools)(policy, workspaceRoot);
     fsTools.forEach(t => gateway.registerTool(t));
+    // Register patch tools
+    const patchTools = (0, patch_1.createPatchTools)(policy, workspaceRoot);
+    patchTools.forEach(t => gateway.registerTool(t));
     gateway.registerTool((0, tasks_1.createManageTaskTool)(taskManager));
     // Initialize enhanced terminal manager with custom icon and history persistence
     const terminalIconPath = path.join(context.extensionPath, 'src', 'ui', 'media', 'vibey-terminal.svg');
