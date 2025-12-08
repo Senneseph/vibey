@@ -71,7 +71,12 @@ export class HistoryManager {
         }
     }
 
+
+    private gitIgnoreChecked = false;
+
     private async ensureGitIgnore() {
+        if (this.gitIgnoreChecked) return;
+
         const gitIgnorePath = path.join(this.workspaceRoot, '.gitignore');
         const ignoreRule = '.vibey/';
 
@@ -91,7 +96,10 @@ export class HistoryManager {
             }
         } catch (error) {
             console.error('Failed to update .gitignore:', error);
+
             // Don't modify if we can't read/write safely
+        } finally {
+            this.gitIgnoreChecked = true;
         }
     }
 }
