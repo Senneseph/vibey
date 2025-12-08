@@ -13,6 +13,9 @@ class ToolGateway {
     registerTool(tool) {
         this.tools.set(tool.name, tool);
     }
+    unregisterTool(name) {
+        this.tools.delete(name);
+    }
     getToolDefinitions() {
         return Array.from(this.tools.values());
     }

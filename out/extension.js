@@ -1,8 +1,41 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.activate = activate;
 exports.deactivate = deactivate;
-const vscode = require("vscode");
+const vscode = __importStar(require("vscode"));
 const orchestrator_1 = require("./agent/orchestrator");
 const ollama_1 = require("./llm/ollama");
 const gateway_1 = require("./tools/gateway");
@@ -14,6 +47,9 @@ const ChatPanel_1 = require("./ui/ChatPanel");
 const terminal_manager_1 = require("./agent/terminal_manager");
 const terminal_1 = require("./tools/definitions/terminal");
 const history_manager_1 = require("./agent/history_manager");
+const mcp_service_1 = require("./agent/mcp/mcp_service");
+// Module-level reference for cleanup
+let mcpService;
 function activate(context) {
     console.log('Vibey is now active!');
     // 1. Initialize Components
@@ -24,13 +60,18 @@ function activate(context) {
     const policy = new policy_engine_1.PolicyEngine(workspaceRoot);
     const gateway = new gateway_1.ToolGateway(policy);
     const taskManager = new task_manager_1.TaskManager();
-    // Register tools
+    // Register built-in tools
     const fsTools = (0, filesystem_1.createFileSystemTools)(policy, workspaceRoot);
     fsTools.forEach(t => gateway.registerTool(t));
     gateway.registerTool((0, tasks_1.createManageTaskTool)(taskManager));
     const terminalManager = new terminal_manager_1.TerminalManager(workspaceRoot);
     const terminalTools = (0, terminal_1.createTerminalTools)(terminalManager);
     terminalTools.forEach(t => gateway.registerTool(t));
+    // Initialize MCP Service for external tool discovery
+    mcpService = new mcp_service_1.McpService(gateway, context);
+    mcpService.initialize().catch(err => {
+        console.error('[Vibey] Failed to initialize MCP service:', err);
+    });
     const llm = new ollama_1.OllamaClient();
     const orchestrator = new orchestrator_1.AgentOrchestrator(llm, gateway, workspaceRoot);
     const historyManager = new history_manager_1.HistoryManager(context, workspaceRoot);
@@ -66,9 +107,57 @@ function activate(context) {
             vscode.window.showErrorMessage(`Failed to select model: ${err.message}`);
         }
     });
+    // MCP Commands
+    const mcpStatusCommand = vscode.commands.registerCommand('vibey.mcpStatus', () => {
+        if (!mcpService) {
+            vscode.window.showErrorMessage('MCP service not initialized');
+            return;
+        }
+        const states = mcpService.getServerStates();
+        if (states.length === 0) {
+            vscode.window.showInformationMessage('No MCP servers configured. Add servers in settings (vibey.mcpServers)');
+            return;
+        }
+        const statusLines = states.map(s => {
+            const status = s.status === 'connected' ? '✅' : s.status === 'error' ? '❌' : '⏳';
+            return `${status} ${s.name}: ${s.toolCount} tools, ${s.resourceCount} resources${s.error ? ` (${s.error})` : ''}`;
+        });
+        vscode.window.showInformationMessage(`MCP Servers:\n${statusLines.join('\n')}`);
+    });
+    const mcpReloadCommand = vscode.commands.registerCommand('vibey.mcpReload', async () => {
+        if (!mcpService) {
+            vscode.window.showErrorMessage('MCP service not initialized');
+            return;
+        }
+        vscode.window.showInformationMessage('Reloading MCP servers...');
+        await mcpService.reloadServers();
+    });
+    const mcpListToolsCommand = vscode.commands.registerCommand('vibey.mcpListTools', () => {
+        const allTools = gateway.getToolDefinitions();
+        const toolNames = allTools.map(t => t.name).sort();
+        vscode.window.showQuickPick(toolNames, {
+            placeHolder: 'Available tools (built-in + MCP)',
+            canPickMany: false
+        }).then(selected => {
+            if (selected) {
+                const tool = allTools.find(t => t.name === selected);
+                if (tool) {
+                    vscode.window.showInformationMessage(`${tool.name}: ${tool.description}`);
+                }
+            }
+        });
+    });
     context.subscriptions.push(startCommand);
     context.subscriptions.push(settingsCommand);
     context.subscriptions.push(selectModelCommand);
+    context.subscriptions.push(mcpStatusCommand);
+    context.subscriptions.push(mcpReloadCommand);
+    context.subscriptions.push(mcpListToolsCommand);
 }
-function deactivate() { }
+async function deactivate() {
+    if (mcpService) {
+        await mcpService.dispose();
+        mcpService = undefined;
+    }
+}
 //# sourceMappingURL=extension.js.map

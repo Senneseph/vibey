@@ -14,8 +14,13 @@ export class ToolGateway {
     }
 
 
+
     registerTool(tool: ToolDefinition) {
         this.tools.set(tool.name, tool);
+    }
+
+    unregisterTool(name: string) {
+        this.tools.delete(name);
     }
 
     getToolDefinitions(): ToolDefinition[] {
