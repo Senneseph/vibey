@@ -52,7 +52,8 @@ Do not write normal text if you are using a tool. Output ONLY the JSON block.
 `;
     }
 
-    async chat(userMessage: string, contextItems?: ContextItem[]): Promise<string> {
+
+    async chat(userMessage: string, contextItems?: ContextItem[], onUpdate?: (update: any) => void): Promise<string> {
         // Resolve context if any
         let fullMessage = userMessage;
         if (contextItems && contextItems.length > 0) {
@@ -70,6 +71,8 @@ Do not write normal text if you are using a tool. Output ONLY the JSON block.
             turns++;
 
             // 2. Call LLM
+            if (onUpdate) onUpdate({ type: 'thinking', message: 'Analyzing request...' });
+
             const responseText = await this.llm.chat(this.context.history);
 
             // 3. Parse Response
@@ -87,6 +90,12 @@ Do not write normal text if you are using a tool. Output ONLY the JSON block.
             try {
                 const jsonStr = jsonMatch[1] || jsonMatch[0];
                 parsed = JSON.parse(jsonStr);
+
+                // Emit thought if present
+                if (parsed.thought && onUpdate) {
+                    onUpdate({ type: 'thought', message: parsed.thought });
+                }
+
             } catch (e) {
                 // Failed to parse, return raw text
                 this.context.history.push({ role: 'assistant', content: responseText });
@@ -100,12 +109,19 @@ Do not write normal text if you are using a tool. Output ONLY the JSON block.
                 // Execute sequentially
                 for (const call of parsed.tool_calls) {
                     try {
+                        if (onUpdate) onUpdate({ type: 'tool_start', tool: call.name });
+
                         const result = await this.tools.executeTool(call as ToolCall);
+
+                        if (onUpdate) onUpdate({ type: 'tool_end', tool: call.name, success: true });
+
                         this.context.history.push({
                             role: 'tool',
                             content: JSON.stringify(result)
                         });
                     } catch (error: any) {
+                        if (onUpdate) onUpdate({ type: 'tool_end', tool: call.name, success: false, error: error.message });
+
                         this.context.history.push({
                             role: 'tool',
                             content: JSON.stringify({
