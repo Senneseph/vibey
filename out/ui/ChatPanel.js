@@ -41,6 +41,7 @@ class ChatPanel {
         this.orchestrator = orchestrator;
         this.taskManager = taskManager;
         this.historyManager = historyManager;
+        this.currentHistory = [];
     }
     async resolveWebviewView(webviewView, context, _token) {
         this._view = webviewView;
@@ -50,9 +51,9 @@ class ChatPanel {
         };
         webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
         // Restore History
-        const history = await this.historyManager.loadHistory();
-        if (history.length > 0) {
-            history.forEach(msg => {
+        this.currentHistory = await this.historyManager.loadHistory();
+        if (this.currentHistory.length > 0) {
+            this.currentHistory.forEach(msg => {
                 webviewView.webview.postMessage({ type: 'addMessage', role: msg.role, content: msg.content });
             });
         }
@@ -61,8 +62,11 @@ class ChatPanel {
                 case 'sendMessage': {
                     if (!data.text)
                         return;
-                    // Respond immediately (echo)
-                    webviewView.webview.postMessage({ type: 'addMessage', role: 'user', content: data.text });
+                    // 1. Add User Message & Save Immediately
+                    const userMsg = { role: 'user', content: data.text };
+                    this.currentHistory.push(userMsg);
+                    webviewView.webview.postMessage({ type: 'addMessage', role: userMsg.role, content: userMsg.content });
+                    await this.historyManager.saveHistory(this.currentHistory);
                     // Call Agent with Context (Pass data.context)
                     try {
                         const onUpdate = (update) => {
@@ -71,11 +75,9 @@ class ChatPanel {
                         // We will update orchestrator to accept onUpdate
                         const response = await this.orchestrator.chat(data.text, data.context, onUpdate);
                         webviewView.webview.postMessage({ type: 'addMessage', role: 'assistant', content: response });
-                        // Save History
-                        const newHistory = await this.historyManager.loadHistory();
-                        newHistory.push({ role: 'user', content: data.text });
-                        newHistory.push({ role: 'assistant', content: response });
-                        await this.historyManager.saveHistory(newHistory);
+                        // 2. Add Assistant Message & Save
+                        this.currentHistory.push({ role: 'assistant', content: response });
+                        await this.historyManager.saveHistory(this.currentHistory);
                         if (response !== 'Request cancelled.') {
                             webviewView.webview.postMessage({ type: 'requestComplete' });
                         }

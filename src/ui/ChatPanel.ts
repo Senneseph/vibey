@@ -6,17 +6,18 @@ import { TaskManager } from '../agent/task_manager';
 import { HistoryManager } from '../agent/history_manager';
 
 export class ChatPanel implements vscode.WebviewViewProvider {
+
     public static readonly viewType = 'vibey.chatView';
     private _view?: vscode.WebviewView;
 
+    private currentHistory: { role: string; content: string }[] = [];
+
     constructor(
         private readonly _extensionUri: vscode.Uri,
-
         private readonly orchestrator: AgentOrchestrator,
         private readonly taskManager: TaskManager,
         private readonly historyManager: HistoryManager
     ) { }
-
 
     public async resolveWebviewView(
         webviewView: vscode.WebviewView,
@@ -33,9 +34,9 @@ export class ChatPanel implements vscode.WebviewViewProvider {
         webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
 
         // Restore History
-        const history = await this.historyManager.loadHistory();
-        if (history.length > 0) {
-            history.forEach(msg => {
+        this.currentHistory = await this.historyManager.loadHistory();
+        if (this.currentHistory.length > 0) {
+            this.currentHistory.forEach(msg => {
                 webviewView.webview.postMessage({ type: 'addMessage', role: msg.role, content: msg.content });
             });
         }
@@ -45,8 +46,11 @@ export class ChatPanel implements vscode.WebviewViewProvider {
                 case 'sendMessage': {
                     if (!data.text) return;
 
-                    // Respond immediately (echo)
-                    webviewView.webview.postMessage({ type: 'addMessage', role: 'user', content: data.text });
+                    // 1. Add User Message & Save Immediately
+                    const userMsg = { role: 'user', content: data.text };
+                    this.currentHistory.push(userMsg);
+                    webviewView.webview.postMessage({ type: 'addMessage', role: userMsg.role, content: userMsg.content });
+                    await this.historyManager.saveHistory(this.currentHistory);
 
                     // Call Agent with Context (Pass data.context)
                     try {
@@ -54,18 +58,13 @@ export class ChatPanel implements vscode.WebviewViewProvider {
                             webviewView.webview.postMessage({ type: 'agentUpdate', update });
                         };
 
-
-
-
                         // We will update orchestrator to accept onUpdate
                         const response = await this.orchestrator.chat(data.text, data.context, onUpdate);
                         webviewView.webview.postMessage({ type: 'addMessage', role: 'assistant', content: response });
 
-                        // Save History
-                        const newHistory = await this.historyManager.loadHistory();
-                        newHistory.push({ role: 'user', content: data.text });
-                        newHistory.push({ role: 'assistant', content: response });
-                        await this.historyManager.saveHistory(newHistory);
+                        // 2. Add Assistant Message & Save
+                        this.currentHistory.push({ role: 'assistant', content: response });
+                        await this.historyManager.saveHistory(this.currentHistory);
 
                         if (response !== 'Request cancelled.') {
                             webviewView.webview.postMessage({ type: 'requestComplete' });
