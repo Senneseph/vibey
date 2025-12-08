@@ -14,6 +14,7 @@ import { ChatPanel } from './ui/ChatPanel';
 
 import { VibeyTerminalManager } from './agent/terminal';
 import { createTerminalTools } from './tools/definitions/terminal';
+import { createEditorTools } from './tools/definitions/editor';
 import { HistoryManager } from './agent/history_manager';
 import { McpService } from './agent/mcp/mcp_service';
 
@@ -50,6 +51,10 @@ export function activate(context: vscode.ExtensionContext) {
     terminalManager = new VibeyTerminalManager(workspaceRoot, context, terminalIconPath);
     const terminalTools = createTerminalTools(terminalManager);
     terminalTools.forEach(t => gateway.registerTool(t));
+
+    // Register editor awareness tools
+    const editorTools = createEditorTools();
+    editorTools.forEach(t => gateway.registerTool(t));
 
     // Initialize MCP Service for external tool discovery
     mcpService = new McpService(gateway, context);

@@ -48,6 +48,7 @@ const task_manager_1 = require("./agent/task_manager");
 const ChatPanel_1 = require("./ui/ChatPanel");
 const terminal_1 = require("./agent/terminal");
 const terminal_2 = require("./tools/definitions/terminal");
+const editor_1 = require("./tools/definitions/editor");
 const history_manager_1 = require("./agent/history_manager");
 const mcp_service_1 = require("./agent/mcp/mcp_service");
 // Module-level references for cleanup
@@ -75,6 +76,9 @@ function activate(context) {
     terminalManager = new terminal_1.VibeyTerminalManager(workspaceRoot, context, terminalIconPath);
     const terminalTools = (0, terminal_2.createTerminalTools)(terminalManager);
     terminalTools.forEach(t => gateway.registerTool(t));
+    // Register editor awareness tools
+    const editorTools = (0, editor_1.createEditorTools)();
+    editorTools.forEach(t => gateway.registerTool(t));
     // Initialize MCP Service for external tool discovery
     mcpService = new mcp_service_1.McpService(gateway, context);
     mcpService.initialize().catch(err => {
