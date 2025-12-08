@@ -4,13 +4,58 @@ const chatContainer = document.getElementById('chat-container');
 const inputBox = document.getElementById('InputBox');
 const sendBtn = document.getElementById('send-btn');
 const attachBtn = document.getElementById('attach-btn');
+
 const settingsBtn = document.getElementById('settings-btn');
+const micBtn = document.getElementById('mic-btn'); // New
 const contextArea = document.getElementById('context-area');
 
 // State
 let contextFiles = [];
+let recognition;
+let isListening = false;
+
+// Initialize Speech Recognition
+if ('webkitSpeechRecognition' in window) {
+    recognition = new webkitSpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+
+    recognition.onstart = () => {
+        isListening = true;
+        micBtn.classList.add('listening');
+    };
+
+    recognition.onend = () => {
+        isListening = false;
+        micBtn.classList.remove('listening');
+    };
+
+    recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        inputBox.value += (inputBox.value ? ' ' : '') + transcript;
+        inputBox.focus();
+    };
+
+    recognition.onerror = (event) => {
+        console.error('Speech recognition error', event.error);
+        isListening = false;
+        micBtn.classList.remove('listening');
+    };
+} else {
+    micBtn.style.display = 'none'; // Hide if not supported
+    console.log("Web Speech API not supported.");
+}
 
 // Handlers
+function toggleSpeech() {
+    if (!recognition) return;
+    if (isListening) {
+        recognition.stop();
+    } else {
+        recognition.start();
+    }
+}
+
 function sendMessage() {
     const text = inputBox.value.trim();
     if (!text && contextFiles.length === 0) return;
@@ -64,9 +109,12 @@ inputBox.addEventListener('keydown', (e) => {
     }
 });
 
+
 attachBtn.addEventListener('click', () => {
     vscode.postMessage({ type: 'selectContext' });
 });
+
+micBtn.addEventListener('click', toggleSpeech);
 
 settingsBtn.addEventListener('click', () => {
     vscode.postMessage({ type: 'openSettings' });
