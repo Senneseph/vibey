@@ -9,7 +9,9 @@ export class ChatPanel implements vscode.WebviewViewProvider {
     public static readonly viewType = 'vibey.chatView';
     private _view?: vscode.WebviewView;
 
+
     private currentHistory: { role: string; content: string }[] = [];
+    private isGenerating: boolean = false;
 
     constructor(
         private readonly _extensionUri: vscode.Uri,
@@ -38,12 +40,16 @@ export class ChatPanel implements vscode.WebviewViewProvider {
             switch (data.type) {
                 case 'webviewReady': {
                     // Webview has loaded and is ready to receive messages
-                    // Now send the history
+                    // 1. Restore History
                     if (this.currentHistory.length > 0) {
-                        webviewView.webview.postMessage({
+                        this._view?.webview.postMessage({
                             type: 'restoreHistory',
                             messages: this.currentHistory
                         });
+                    }
+                    // 2. Restore State (if mid-generation)
+                    if (this.isGenerating) {
+                        this._view?.webview.postMessage({ type: 'restoreState', busy: true });
                     }
                     break;
                 }
@@ -53,29 +59,35 @@ export class ChatPanel implements vscode.WebviewViewProvider {
                     // 1. Add User Message & Save Immediately
                     const userMsg = { role: 'user', content: data.text };
                     this.currentHistory.push(userMsg);
-                    webviewView.webview.postMessage({ type: 'addMessage', role: userMsg.role, content: userMsg.content });
+                    this._view?.webview.postMessage({ type: 'addMessage', role: userMsg.role, content: userMsg.content });
                     await this.historyManager.saveHistory(this.currentHistory);
+
+                    this.isGenerating = true;
 
                     // Call Agent with Context (Pass data.context)
                     try {
                         const onUpdate = (update: any) => {
-                            webviewView.webview.postMessage({ type: 'agentUpdate', update });
+                            // Helper to send to the CURRENT view, regardless of reload
+                            this._view?.webview.postMessage({ type: 'agentUpdate', update });
                         };
 
                         // We will update orchestrator to accept onUpdate
                         const response = await this.orchestrator.chat(data.text, data.context, onUpdate);
-                        webviewView.webview.postMessage({ type: 'addMessage', role: 'assistant', content: response });
+
+                        this._view?.webview.postMessage({ type: 'addMessage', role: 'assistant', content: response });
 
                         // 2. Add Assistant Message & Save
                         this.currentHistory.push({ role: 'assistant', content: response });
                         await this.historyManager.saveHistory(this.currentHistory);
 
                         if (response !== 'Request cancelled.') {
-                            webviewView.webview.postMessage({ type: 'requestComplete' });
+                            this._view?.webview.postMessage({ type: 'requestComplete' });
                         }
                     } catch (e: any) {
-                        webviewView.webview.postMessage({ type: 'addMessage', role: 'assistant', content: `Error: ${e.message}` });
-                        webviewView.webview.postMessage({ type: 'requestComplete' }); // Even on error we are done
+                        this._view?.webview.postMessage({ type: 'addMessage', role: 'assistant', content: `Error: ${e.message}` });
+                        this._view?.webview.postMessage({ type: 'requestComplete' }); // Even on error we are done
+                    } finally {
+                        this.isGenerating = false;
                     }
                     break;
                 }
