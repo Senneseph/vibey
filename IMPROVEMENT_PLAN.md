@@ -1,73 +1,26 @@
-# Vibey Codebase Improvement Plan
+# Improvement Plan for Task Management System
 
-## Current State Analysis
+## Issues Identified
 
-The Vibey agent system already has several good foundations:
+1. **Display Problem**: Task steps show as `[object Object]` instead of actual descriptions
+2. **Status Update Problem**: Task status updates not working properly
+3. **Missing UI Feedback**: Completed tasks don't show checkmarks
 
-1. **History Management**: The `HistoryManager` properly persists chat history to both workspace state and file system
-2. **Tool System**: Well-defined tool architecture with filesystem, patch, terminal, and task management tools
-3. **Vectorization**: Basic vectorization utilities and in-memory vector database
-4. **Task Management**: Task tracking system with status management
-5. **Orchestration**: Agent orchestrator that handles LLM interaction and tool execution
+## Root Causes
 
-## Key Improvements Based on User Suggestions
+1. The `manage_task` tool definition has incorrect parameter handling for task updates
+2. The task manager's update methods may not be properly implemented
+3. The UI layer may not be correctly rendering task data
 
-### 1. Preserve Thinking and Command Execution in Chat History
+## Proposed Solutions
 
-The current implementation already has good support for this in `AgentOrchestrator`:
-- Tool calls are logged in the history
-- Thoughts are emitted via onUpdate callback
-- All actions are recorded in the conversation flow
+1. Fix the task update method in `TaskManager` class
+2. Improve the `manage_task` tool to properly handle status updates
+3. Add better serialization for task display
 
-However, we can enhance this by:
-- Adding more detailed metadata to tool execution logs
-- Improving the visualization of thinking processes in the UI
+## Implementation Steps
 
-### 2. Show Parameters When Executing Tools
-
-The current system shows parameters in the `onUpdate` callback but we can improve:
-- Better formatting of tool parameters in the UI
-- More detailed logging of tool execution
-- Enhanced parameter validation feedback
-
-### 3. Patch/Replace Style Implementation (Existing)
-
-The `createPatchTools` function already provides `apply_patch` and `generate_patch` tools. This is exactly what was requested.
-
-### 4. Text Vectorization and Database Exploration
-
-The system has a basic vectorization utility and in-memory database, but we can enhance it:
-- Implement better vectorization using proper embedding models
-- Add support for external vector databases (Pinecone, Weaviate, etc.)
-- Improve search and retrieval capabilities
-
-## Implementation Plan
-
-### Phase 1: Enhance History Management
-- Improve parameter logging in tool execution
-- Add more structured metadata to history entries
-- Enhance UI visualization of thinking processes
-
-### Phase 2: Improve Vectorization
-- Replace simple hash-based vectors with proper embeddings
-- Implement external vector database support
-- Add vector search optimization
-
-### Phase 3: Refine Tool Execution
-- Add more detailed tool execution logging
-- Improve parameter validation and error handling
-- Add tool usage statistics
-
-## Files to Modify
-
-1. `src/agent/orchestrator.ts` - Enhance tool execution logging
-2. `src/agent/vectorization.ts` - Improve vectorization implementation
-3. `src/tools/definitions/patch.ts` - Enhance patch tools
-4. `src/agent/history_manager.ts` - Improve history structure
-5. `src/agent/task_manager.ts` - Enhance task tracking
-
-## Technical Debt Considerations
-
-- The current vectorization is a placeholder implementation
-- Need to evaluate proper embedding libraries
-- Consider performance implications of vector database integration
+1. Fix the `updateTaskStatus` method in `TaskManager`
+2. Fix the `updateStepStatus` method in `TaskManager`
+3. Improve the `manage_task` tool definition
+4. Test the complete lifecycle
