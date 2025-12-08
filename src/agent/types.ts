@@ -29,6 +29,8 @@ export interface Task {
     createdAt: number;
 }
 
+
 export interface LLMProvider {
-    chat(messages: ChatMessage[]): Promise<string>; // Returns raw text (which might contain tool calls)
+    chat(messages: ChatMessage[], signal?: AbortSignal): Promise<string>; // Returns raw text (which might contain tool calls)
+    listModels(): Promise<string[]>;
 }

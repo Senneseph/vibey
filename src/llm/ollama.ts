@@ -26,7 +26,8 @@ export class OllamaClient implements LLMProvider {
         };
     }
 
-    async chat(messages: ChatMessage[]): Promise<string> {
+
+    async chat(messages: ChatMessage[], signal?: AbortSignal): Promise<string> {
         const { modelName, baseUrl } = this.getConfig();
 
         const payload = {
@@ -48,7 +49,8 @@ export class OllamaClient implements LLMProvider {
             const response = await fetch(`${baseUrl}/api/chat`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
+                body: JSON.stringify(payload),
+                signal // Pass signal to fetch
             });
 
             if (!response.ok) {
@@ -59,7 +61,10 @@ export class OllamaClient implements LLMProvider {
 
             return data.message.content;
 
-        } catch (error) {
+        } catch (error: any) {
+            if (error.name === 'AbortError') {
+                throw new Error('Request cancelled by user');
+            }
             console.error('Failed to call Ollama:', error);
             throw error;
         }
