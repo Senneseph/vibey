@@ -1,0 +1,7 @@
+This is a test file created to demonstrate the task lifecycle.
+
+The task has been planned and the first step is now in progress.
+
+Step 1: Create a test file
+Step 2: Write content to the test file
+Step 3: Verify the content was written correctly
