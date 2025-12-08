@@ -107,10 +107,14 @@ class TaskManager {
     getCurrentStep(taskId) {
         const task = this.tasks.get(taskId);
         if (!task)
-            return null;
+            return undefined;
         // Find first pending or in-progress step
         const currentStep = task.steps.find(step => step.status === 'in-progress' || step.status === 'pending');
-        return currentStep || null;
+        // Return the task with the current step information
+        if (currentStep) {
+            return task;
+        }
+        return task;
     }
     // Method to mark a step as in-progress
     startStep(taskId, stepIndex) {
@@ -146,7 +150,9 @@ class TaskManager {
         if (!task)
             return undefined;
         const progress = this.getTaskProgress(taskId);
-        task.progress = progress;
+        if (progress) {
+            task.progress = progress;
+        }
         return task;
     }
     getTask(id) {
