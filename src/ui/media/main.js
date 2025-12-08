@@ -316,8 +316,14 @@ window.addEventListener('message', event => {
                     renderMessage(msg.role, msg.content);
                 });
             }
+
             // Scroll to bottom after restoring
             chatContainer.scrollTop = chatContainer.scrollHeight;
+            break;
+        case 'restoreState':
+            if (message.busy) {
+                setProcessing(true);
+            }
             break;
         case 'addMessage':
             renderMessage(message.role, message.content);

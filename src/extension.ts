@@ -6,6 +6,7 @@ import { ToolGateway } from './tools/gateway';
 import { PolicyEngine } from './security/policy_engine';
 
 import { createFileSystemTools } from './tools/definitions/filesystem';
+import { createPatchTools } from './tools/definitions/patch';
 
 import { createManageTaskTool } from './tools/definitions/tasks';
 import { TaskManager } from './agent/task_manager';
@@ -37,6 +38,10 @@ export function activate(context: vscode.ExtensionContext) {
     // Register built-in tools
     const fsTools = createFileSystemTools(policy, workspaceRoot);
     fsTools.forEach(t => gateway.registerTool(t));
+
+    // Register patch tools
+    const patchTools = createPatchTools(policy, workspaceRoot);
+    patchTools.forEach(t => gateway.registerTool(t));
 
     gateway.registerTool(createManageTaskTool(taskManager));
 
