@@ -8,6 +8,7 @@
 - **Offline-First Intelligence**: Powered by local LLMs (Ollama), keeping your code private.
 - **Autonomous Agents**: Vibey can plan, execute tools, and verify its own work.
 - **Unified Chat & Tasks**: seamlessly switch between chat and structured task tracking.
+- **Attention Management**: Advanced context management with checkpoint system to clear working context once items are completed.
 - **Tool Ecosystem**:
     - **Filesystem**: Read, write, list files, and scan projects.
     - **Terminal**: Run commands, managing long-running processes (servers, watchers).

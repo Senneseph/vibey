@@ -13,10 +13,18 @@ export interface ProjectStructure {
     directories: { [key: string]: ProjectStructure };
 }
 
+export interface Checkpoint {
+    id: string;
+    timestamp: number;
+    description: string;
+    contextItems: string[];
+}
+
 export class ContextManager {
     private projectStructure: ProjectStructure | null = null;
     private masterContext: Map<string, string> = new Map(); // Master context storage
     private contextWindowTokens: number = 256 * 1024; // 256k token window
+    private checkpoints: Checkpoint[] = [];
     
     async resolveContext(items: ContextItem[]): Promise<string> {
         if (!items || items.length === 0) return '';
@@ -197,5 +205,73 @@ export class ContextManager {
         
         // Generate sliding window context
         return this.generateSlidingWindowContext();
+    }
+    
+    // NEW: Checkpoint functionality
+    
+    // Create a checkpoint to mark completion of certain context items
+    createCheckpoint(description: string, contextItems?: string[]): Checkpoint {
+        const checkpoint: Checkpoint = {
+            id: `checkpoint_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            timestamp: Date.now(),
+            description,
+            contextItems: contextItems || []
+        };
+        
+        this.checkpoints.push(checkpoint);
+        return checkpoint;
+    }
+    
+    // Get all checkpoints
+    getCheckpoints(): Checkpoint[] {
+        return [...this.checkpoints];
+    }
+    
+    // Clear context items that were part of a specific checkpoint
+    clearCheckpointContext(checkpointId: string): void {
+        const checkpoint = this.checkpoints.find(c => c.id === checkpointId);
+        if (checkpoint) {
+            // Remove context items that were part of this checkpoint
+            for (const item of checkpoint.contextItems) {
+                // Remove items that match the pattern
+                for (const key of this.masterContext.keys()) {
+                    if (key.includes(item)) {
+                        this.masterContext.delete(key);
+                    }
+                }
+            }
+        }
+    }
+    
+    // Clear all context items that were part of checkpoints
+    clearAllCheckpointContext(): void {
+        // For now, we'll clear all context items
+        // In a more advanced implementation, we could be more selective
+        this.masterContext.clear();
+        this.checkpoints = [];
+    }
+    
+    // Get a summary of what's in the current context window
+    getContextSummary(): string {
+        const keys = Array.from(this.masterContext.keys());
+        return `Current context items: ${keys.length} items\n\n${keys.join('\n')}`;
+    }
+    
+    // Review checkpointed context and decide what to keep or remove
+    reviewCheckpointContext(): void {
+        if (this.checkpoints.length === 0) {
+            console.log('No checkpoints to review');
+            return;
+        }
+        
+        console.log('Reviewing checkpoints and context items:');
+        for (const checkpoint of this.checkpoints) {
+            console.log(`- ${checkpoint.id}: ${checkpoint.description} (${checkpoint.contextItems.length} items)`);
+        }
+        
+        console.log('\nCurrent master context keys:');
+        for (const key of this.masterContext.keys()) {
+            console.log(`  - ${key}`);
+        }
     }
 }
