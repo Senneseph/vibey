@@ -50,61 +50,148 @@ let isResumable = false;
 let taskFilters = { status: 'all', sort: 'date-desc' };
 let allTasks = [];
 
-// Initialize Voice Service
+// Initialize Voice Service - Push-to-Talk implementation
 let voiceService = {
     isSupported: 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window,
     isListening: false,
-    start: function() {
-        return new Promise((resolve, reject) => {
-            if (!this.isSupported) {
-                reject(new Error('Speech recognition not supported')); 
-                return;
-            }
-            
-            if (this.isListening) {
-                reject(new Error('Already listening')); 
-                return;
-            }
-            
-            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            const recognition = new SpeechRecognition();
-            recognition.continuous = false;
-            recognition.interimResults = false;
-            recognition.lang = 'en-US';
-            
-            recognition.onresult = (event) => {
-                if (event.results && event.results.length > 0) {
-                    const transcript = event.results[0][0].transcript;
-                    resolve(transcript);
+    recognition: null,
+    transcript: '',
+
+    startListening: function() {
+        if (!this.isSupported) {
+            console.error('Speech recognition not supported');
+            return;
+        }
+
+        if (this.isListening) return;
+
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        this.recognition = new SpeechRecognition();
+        this.recognition.continuous = true;  // Keep listening while button is held
+        this.recognition.interimResults = true;  // Get results as we speak
+        this.recognition.lang = 'en-US';
+        this.transcript = '';
+
+        this.recognition.onresult = (event) => {
+            let finalTranscript = '';
+            let interimTranscript = '';
+
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+                const result = event.results[i];
+                if (result.isFinal) {
+                    finalTranscript += result[0].transcript;
                 } else {
-                    reject(new Error('No speech detected'));
+                    interimTranscript += result[0].transcript;
                 }
-                this.isListening = false;
-                micBtn.classList.remove('listening');
-            };
-            
-            recognition.onerror = (event) => {
-                console.error('Speech recognition error', event.error);
-                this.isListening = false;
-                micBtn.classList.remove('listening');
-                reject(new Error(`Speech recognition error: ${event.error}`));
-            };
-            
-            recognition.onend = () => {
-                this.isListening = false;
-                micBtn.classList.remove('listening');
-            };
-            
-            this.isListening = true;
-            micBtn.classList.add('listening');
-            recognition.start();
-        });
+            }
+
+            // Update the cumulative transcript with final results
+            if (finalTranscript) {
+                this.transcript += finalTranscript + ' ';
+            }
+
+            // Show interim results in the input box (preview)
+            if (inputBox) {
+                const existingText = inputBox.dataset.originalText || '';
+                inputBox.value = existingText + this.transcript + interimTranscript;
+            }
+        };
+
+        this.recognition.onerror = (event) => {
+            console.error('Speech recognition error:', event.error);
+            // Don't stop on 'no-speech' error - user might just be pausing
+            if (event.error !== 'no-speech') {
+                this.stopListening();
+            }
+        };
+
+        this.recognition.onend = () => {
+            // If we're still supposed to be listening (button still held), restart
+            if (this.isListening) {
+                try {
+                    this.recognition.start();
+                } catch (e) {
+                    console.error('Failed to restart recognition:', e);
+                }
+            }
+        };
+
+        // Save original text before we start
+        if (inputBox) {
+            inputBox.dataset.originalText = inputBox.value;
+        }
+
+        this.isListening = true;
+        if (micBtn) micBtn.classList.add('listening');
+
+        try {
+            this.recognition.start();
+        } catch (e) {
+            console.error('Failed to start recognition:', e);
+            this.isListening = false;
+            if (micBtn) micBtn.classList.remove('listening');
+        }
+    },
+
+    stopListening: function() {
+        this.isListening = false;
+        if (micBtn) micBtn.classList.remove('listening');
+
+        if (this.recognition) {
+            try {
+                this.recognition.stop();
+            } catch (e) {
+                console.error('Failed to stop recognition:', e);
+            }
+            this.recognition = null;
+        }
+
+        // Finalize the transcript into the input box
+        if (inputBox) {
+            const originalText = inputBox.dataset.originalText || '';
+            const finalText = originalText + this.transcript.trim();
+            inputBox.value = finalText;
+            delete inputBox.dataset.originalText;
+            updateSendButtonState();
+            inputBox.focus();
+        }
+
+        this.transcript = '';
     }
 };
 
 // Check if voice service is supported
 if (!voiceService.isSupported) {
     if (micBtn) micBtn.style.display = 'none';
+} else if (micBtn) {
+    // Set up push-to-talk: mousedown to start, mouseup to stop
+    micBtn.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        voiceService.startListening();
+    });
+
+    micBtn.addEventListener('mouseup', (e) => {
+        e.preventDefault();
+        voiceService.stopListening();
+    });
+
+    // Handle mouse leaving the button while pressed
+    micBtn.addEventListener('mouseleave', () => {
+        if (voiceService.isListening) {
+            voiceService.stopListening();
+        }
+    });
+
+    // Touch support for mobile/tablet
+    micBtn.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        voiceService.startListening();
+    });
+
+    micBtn.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        voiceService.stopListening();
+    });
 }
 
 function updateSendButtonState() {
@@ -123,18 +210,20 @@ function updateSendButtonState() {
     }
 }
 
-// Handlers
+// Legacy toggleSpeech function (for keyboard shortcut compatibility)
 function toggleSpeech() {
     if (!voiceService.isSupported) return;
-    
+
     if (voiceService.isListening) {
-        // Currently we don't have a way to stop the recognition in the browser,
-        // so we just update the UI
-        voiceService.isListening = false;
-        micBtn.classList.remove('listening');
+        voiceService.stopListening();
     } else {
-        // Request voice input from extension
-        vscode.postMessage({ type: 'voiceInput' });
+        voiceService.startListening();
+        // Auto-stop after 10 seconds for keyboard shortcut
+        setTimeout(() => {
+            if (voiceService.isListening) {
+                voiceService.stopListening();
+            }
+        }, 10000);
     }
 }
 
@@ -504,7 +593,7 @@ if (attachBtn) {
     });
 }
 
-if (micBtn) micBtn.addEventListener('click', toggleSpeech);
+// Note: micBtn uses push-to-talk (mousedown/mouseup) handlers set up in voiceService initialization
 
 const modelsBtn = document.getElementById('models-btn');
 if (modelsBtn) {

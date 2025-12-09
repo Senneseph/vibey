@@ -3,13 +3,11 @@ import { AgentOrchestrator } from '../agent/orchestrator';
 
 import { TaskManager } from '../agent/task_manager';
 import { HistoryManager } from '../agent/history_manager';
-import { VoiceService } from '../voice/voice_service';
 
 export class ChatPanel implements vscode.WebviewViewProvider {
 
     public static readonly viewType = 'vibey.chatView';
     private _view?: vscode.WebviewView;
-    private voiceService: VoiceService;
 
 
     private currentHistory: { role: string; content: string; agentUpdates?: any[] }[] = [];
@@ -25,9 +23,7 @@ export class ChatPanel implements vscode.WebviewViewProvider {
         private readonly orchestrator: AgentOrchestrator,
         private readonly taskManager: TaskManager,
         private readonly historyManager: HistoryManager
-    ) { 
-        this.voiceService = new VoiceService();
-    }
+    ) { }
 
     public async resolveWebviewView(
         webviewView: vscode.WebviewView,
@@ -238,38 +234,15 @@ export class ChatPanel implements vscode.WebviewViewProvider {
     }
 
     private async handleVoiceInput() {
+        // Voice input is now handled entirely on the frontend (webview)
+        // This method is kept for backwards compatibility but voice logic moved to main.js
         try {
-            if (!this.voiceService.isSupported()) {
-                throw new Error('Speech recognition not supported in this browser');
-            }
-            
-            if (this.voiceService.isActive()) {
-                throw new Error('Already listening');
-            }
-            
-            // Notify webview that we're starting to listen
+            // Notify webview to start voice input (webview has the speech recognition)
             if (this.webviewReady) {
-                this._view?.webview.postMessage({ type: 'voiceInputStarted' });
-            }
-            
-            // Start listening
-            const transcript = await this.voiceService.startListening();
-            
-            // Send the transcript back to the webview
-            if (this.webviewReady) {
-                this._view?.webview.postMessage({
-                    type: 'voiceInputReceived',
-                    text: transcript
-                });
+                this._view?.webview.postMessage({ type: 'startVoiceInput' });
             }
         } catch (error: any) {
             console.error('Voice input error:', error);
-            if (this.webviewReady) {
-                this._view?.webview.postMessage({
-                    type: 'voiceInputError',
-                    message: error.message || 'Failed to process voice input'
-                });
-            }
         }
     }
 

@@ -222,8 +222,34 @@ class ChatPanel {
                     vscode.window.showErrorMessage(data.message);
                     break;
                 }
+                case 'voiceInput': {
+                    // Handle voice input request from webview
+                    this.handleVoiceInput().catch(error => {
+                        console.error('Voice input error:', error);
+                        if (this.webviewReady) {
+                            this._view?.webview.postMessage({
+                                type: 'voiceInputError',
+                                message: error.message || 'Failed to process voice input'
+                            });
+                        }
+                    });
+                    break;
+                }
             }
         });
+    }
+    async handleVoiceInput() {
+        // Voice input is now handled entirely on the frontend (webview)
+        // This method is kept for backwards compatibility but voice logic moved to main.js
+        try {
+            // Notify webview to start voice input (webview has the speech recognition)
+            if (this.webviewReady) {
+                this._view?.webview.postMessage({ type: 'startVoiceInput' });
+            }
+        }
+        catch (error) {
+            console.error('Voice input error:', error);
+        }
     }
     _getHtmlForWebview(webview) {
         const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'src', 'ui', 'media', 'main.js'));
