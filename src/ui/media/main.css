@@ -7,6 +7,76 @@ body {
     display: flex;
     flex-direction: column;
     height: 100vh;
+    transition: background-color 0.3s, color 0.3s;
+}
+
+/* Theme classes */
+body.theme-dark {
+    --vscode-editor-foreground: #cccccc;
+    --vscode-editor-background: #1e1e1e;
+    --vscode-button-background: #0e639c;
+    --vscode-button-foreground: #ffffff;
+    --vscode-button-hoverBackground: #1177bb;
+    --vscode-input-background: #3c3c3c;
+    --vscode-input-foreground: #cccccc;
+    --vscode-input-border: #3c3c3c;
+    --vscode-focusBorder: #0078d4;
+    --vscode-widget-border: #3c3c3c;
+    --vscode-list-hoverBackground: #3c3c3c;
+    --vscode-badge-background: #333333;
+    --vscode-badge-foreground: #ffffff;
+    --vscode-textBlockQuote-background: #333333;
+    --vscode-textBlockQuote-border: #0078d4;
+    --vscode-textLink-foreground: #4da6ff;
+    --vscode-descriptionForeground: #888888;
+    --vscode-panel-border: #3c3c3c;
+    --vscode-sideBar-background: #1e1e1e;
+    --vscode-panelTitle-activeBorder: #0078d4;
+    --vscode-panelTitle-activeForeground: #ffffff;
+    --vscode-editor-inactiveSelectionBackground: #333333;
+    --vscode-toolbar-hoverBackground: #3c3c3c;
+    --vscode-progressBar-background: #0078d4;
+    --vscode-testing-iconPassed: #4caf50;
+    --vscode-testing-iconFailed: #f44336;
+    --vscode-errorForeground: #f44336;
+    --vscode-textPreformat-foreground: #d7ba7d;
+    --vscode-notificationInfoIcon-foreground: #2196f3;
+    --vscode-notificationWarningIcon-foreground: #ff9800;
+    --vscode-notificationErrorIcon-foreground: #f44336;
+}
+
+body.theme-light {
+    --vscode-editor-foreground: #333333;
+    --vscode-editor-background: #ffffff;
+    --vscode-button-background: #0078d4;
+    --vscode-button-foreground: #ffffff;
+    --vscode-button-hoverBackground: #005a9e;
+    --vscode-input-background: #ffffff;
+    --vscode-input-foreground: #333333;
+    --vscode-input-border: #cccccc;
+    --vscode-focusBorder: #0078d4;
+    --vscode-widget-border: #cccccc;
+    --vscode-list-hoverBackground: #f3f3f3;
+    --vscode-badge-background: #e4e4e4;
+    --vscode-badge-foreground: #333333;
+    --vscode-textBlockQuote-background: #f5f5f5;
+    --vscode-textBlockQuote-border: #0078d4;
+    --vscode-textLink-foreground: #0066cc;
+    --vscode-descriptionForeground: #666666;
+    --vscode-panel-border: #e1e1e1;
+    --vscode-sideBar-background: #f3f3f3;
+    --vscode-panelTitle-activeBorder: #0078d4;
+    --vscode-panelTitle-activeForeground: #333333;
+    --vscode-editor-inactiveSelectionBackground: #e5e5e5;
+    --vscode-toolbar-hoverBackground: #e1e1e1;
+    --vscode-progressBar-background: #0078d4;
+    --vscode-testing-iconPassed: #4caf50;
+    --vscode-testing-iconFailed: #f44336;
+    --vscode-errorForeground: #a1260d;
+    --vscode-textPreformat-foreground: #000000;
+    --vscode-notificationInfoIcon-foreground: #2196f3;
+    --vscode-notificationWarningIcon-foreground: #ff9800;
+    --vscode-notificationErrorIcon-foreground: #f44336;
 }
 
 /* Tabs */
@@ -58,26 +128,41 @@ body {
     padding: 10px;
 }
 
+/* Message Wrapper with Metadata */
+.message-wrapper {
+    margin-bottom: 12px;
+    margin-left: 5px;
+    animation: fadeIn 0.3s ease;
+}
+
+.message-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+    opacity: 0.7;
+    margin-bottom: 4px;
+    padding: 0 8px;
+}
+
+.message-user {
+    font-weight: 600;
+    color: var(--vscode-textLink-foreground);
+}
+
+.message-timestamp {
+    color: var(--vscode-descriptionForeground);
+    font-family: 'Courier New', monospace;
+}
+
 /* Messages */
 .message {
-    margin-bottom: 12px;
+    margin-bottom: 0;
     padding: 8px 12px;
     border-radius: 6px;
     max-width: 85%;
     word-wrap: break-word;
-    animation: fadeIn 0.3s ease;
 }
-
-@keyframes fadeIn {
-    from {
-        opacity: 0;
-        transform: translateY(5px);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
 }
 
 .message.user {
@@ -383,6 +468,7 @@ body {
     list-style: none;
 }
 
+
 .step-list li {
     margin-bottom: 4px;
     padding-left: 20px;
@@ -395,4 +481,92 @@ body {
     position: absolute;
     left: 4px;
     color: var(--vscode-textPreformat-foreground);
+}
+
+/* Task Filtering Controls */
+.task-filters {
+    display: flex;
+    gap: 8px;
+    padding: 8px;
+    background: var(--vscode-sideBar-background);
+    border-bottom: 1px solid var(--vscode-widget-border);
+    flex-wrap: wrap;
+}
+
+.filter-group {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
+.filter-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--vscode-descriptionForeground);
+}
+
+.filter-btn {
+    padding: 4px 8px;
+    font-size: 11px;
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.filter-btn:hover {
+    background: var(--vscode-button-hoverBackground);
+}
+
+.filter-btn.active {
+    background: var(--vscode-progressBar-background);
+    font-weight: bold;
+}
+
+/* Task progress visualization */
+.task-progress {
+    display: flex;
+    gap: 4px;
+    margin-top: 8px;
+}
+
+.progress-bar {
+    height: 4px;
+    flex: 1;
+    background: var(--vscode-widget-border);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: var(--vscode-progressBar-background);
+    transition: width 0.3s ease;
+}
+
+/* Keyboard shortcut hints */
+.shortcut-hint {
+    position: fixed;
+    bottom: 10px;
+    right: 10px;
+    background: var(--vscode-editor-background);
+    border: 1px solid var(--vscode-widget-border);
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+    opacity: 0.8;
+    pointer-events: none;
+}
+
+.shortcut-key {
+    font-family: 'Courier New', monospace;
+    background: var(--vscode-badge-background);
+    color: var(--vscode-badge-foreground);
+    padding: 2px 4px;
+    border-radius: 2px;
+    margin-left: 4px;
+    display: inline-block;
 }

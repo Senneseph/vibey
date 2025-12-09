@@ -9,6 +9,37 @@ const settingsBtn = document.getElementById('settings-btn');
 const micBtn = document.getElementById('mic-btn');
 const contextArea = document.getElementById('context-area');
 
+// Detect and apply theme
+function applyTheme() {
+    // Get current theme from VS Code
+    const theme = vscode.getState()?.theme || 'dark';
+    
+    // Remove existing theme classes
+    document.body.classList.remove('theme-dark', 'theme-light');
+    
+    // Apply appropriate theme
+    if (theme === 'light') {
+        document.body.classList.add('theme-light');
+    } else {
+        document.body.classList.add('theme-dark');
+    }
+}
+
+// Initialize theme on load
+applyTheme();
+
+// Listen for theme changes
+window.addEventListener('message', event => {
+    const message = event.data;
+    switch (message.type) {
+        case 'themeChanged':
+            // Update theme state
+            const theme = message.theme || 'dark';
+            vscode.setState({ theme });
+            applyTheme();
+            break;
+    }
+});
 
 // State
 let contextFiles = [];
@@ -16,6 +47,8 @@ let recognition;
 let isListening = false;
 let isProcessing = false;
 let isResumable = false;
+let taskFilters = { status: 'all', sort: 'date-desc' };
+let allTasks = [];
 
 // Initialize Speech Recognition
 if ('webkitSpeechRecognition' in window) {
@@ -201,7 +234,16 @@ function formatToolParams(name, params) {
 }
 
 // Helper function to render a single message
-function renderMessage(role, content) {
+// Utility: Get current timestamp in readable format
+function getTimestamp() {
+    const now = new Date();
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const seconds = String(now.getSeconds()).padStart(2, '0');
+    return `${hours}:${minutes}:${seconds}`;
+}
+
+function renderMessage(role, content, timestamp = null) {
     // If it's a tool output (raw JSON result)
     if (role === 'tool') {
         // We try to append this to the previous tool block if it exists
@@ -221,6 +263,20 @@ function renderMessage(role, content) {
         chatContainer.appendChild(div);
         return;
     }
+
+    // Create message wrapper with timestamp and user identification
+    const messageWrapper = document.createElement('div');
+    messageWrapper.className = `message-wrapper ${role}`;
+    
+    const messageMeta = document.createElement('div');
+    messageMeta.className = 'message-meta';
+    messageMeta.innerHTML = `
+        <span class="message-user">${role === 'user' ? 'You' : 'Vibey'}</span>
+        <span class="message-timestamp">${timestamp || getTimestamp()}</span>
+    `;
+    
+    const messageContent = document.createElement('div');
+    messageContent.className = `message ${role}`;
 
     // Assistant messages might be JSON with thoughts/tools
     if (role === 'assistant') {
@@ -256,7 +312,7 @@ function renderMessage(role, content) {
                 const thoughtDiv = document.createElement('div');
                 thoughtDiv.className = 'message system-update';
                 thoughtDiv.innerHTML = `<details open><summary>Thinking Plan</summary><pre>${parsed.thought}</pre></details>`;
-                chatContainer.appendChild(thoughtDiv);
+                messageContent.appendChild(thoughtDiv);
             }
 
             // Render Tool Calls
@@ -275,37 +331,39 @@ function renderMessage(role, content) {
                             <pre>${JSON.stringify(call.parameters, null, 2)}</pre>
                         </details>
                     `;
-                    chatContainer.appendChild(toolDiv);
+                    messageContent.appendChild(toolDiv);
                 });
             }
 
+            // Append message meta and content, then to chat
+            messageWrapper.appendChild(messageMeta);
+            messageWrapper.appendChild(messageContent);
+            chatContainer.appendChild(messageWrapper);
+
             // If it was just JSON, we are done. 
-            // Note: If the response had text before/after JSON, we lose it here strictly speaking.
-            // But our agent usually outputs strict JSON or strict Text. 
-            // If strict text (parsed is null), fall through.
             return;
         }
     }
 
     // Default Text Rendering
-    const div = document.createElement('div');
-    div.className = `message ${role}`;
-    div.innerHTML = content;
+    messageContent.innerHTML = content;
 
     // Basic thinking block support (legacy)
     if (content.includes('<thought>')) {
-        div.innerHTML = content.replace(/<thought>([\s\S]*?)<\/thought>/g,
+        messageContent.innerHTML = content.replace(/<thought>([\s\S]*?)<\/thought>/g,
             '<details open class="thought-block"><summary>Thinking...</summary><pre>$1</pre></details>');
     } else {
         // Formatting for code blocks
         if (!content.includes('<pre>')) {
-            div.innerHTML = content
+            messageContent.innerHTML = content
                 .replace(/\n/g, '<br>')
                 .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
         }
     }
 
-    chatContainer.appendChild(div);
+    messageWrapper.appendChild(messageMeta);
+    messageWrapper.appendChild(messageContent);
+    chatContainer.appendChild(messageWrapper);
 }
 
 function handleAgentUpdate(update) {
@@ -481,8 +539,7 @@ window.addEventListener('message', event => {
             }
             break;
         case 'addMessage':
-            renderMessage(message.role, message.content);
-            // Auto-scroll
+            renderMessage(message.role, message.content, message.timestamp);
             chatContainer.scrollTop = chatContainer.scrollHeight;
             break;
         case 'requestStopped':
@@ -500,11 +557,61 @@ window.addEventListener('message', event => {
             renderContext();
             break;
         case 'updateTasks':
-            renderTasks(message.tasks);
+            allTasks = message.tasks || [];
+            filterAndRenderTasks();
             break;
         case 'agentUpdate':
             handleAgentUpdate(message.update);
             break;
+    }
+});
+
+// Task filtering and sorting
+function filterAndRenderTasks() {
+    let filtered = allTasks;
+    
+    if (taskFilters.status !== 'all') {
+        filtered = filtered.filter(t => t.status === taskFilters.status);
+    }
+    
+    if (taskFilters.sort === 'date-asc') {
+        filtered.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+    } else if (taskFilters.sort === 'date-desc') {
+        filtered.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    } else if (taskFilters.sort === 'priority') {
+        const priorityOrder = { 'high': 0, 'medium': 1, 'low': 2 };
+        filtered.sort((a, b) => (priorityOrder[a.priority] || 99) - (priorityOrder[b.priority] || 99));
+    }
+    
+    renderTasks(filtered);
+}
+
+function updateTaskFilter(status, sort) {
+    if (status !== undefined) taskFilters.status = status;
+    if (sort !== undefined) taskFilters.sort = sort;
+    filterAndRenderTasks();
+}
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+    // Ctrl/Cmd + Enter: Send message
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        if (document.activeElement === inputBox) {
+            e.preventDefault();
+            handleSendClick();
+        }
+    }
+    // Ctrl/Cmd + Shift + M: Toggle mic
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'M') {
+        e.preventDefault();
+        if (micBtn && micBtn.style.display !== 'none') {
+            toggleSpeech();
+        }
+    }
+    // Escape: Stop processing
+    if (e.key === 'Escape' && isProcessing) {
+        e.preventDefault();
+        handleSendClick();
     }
 });
 
