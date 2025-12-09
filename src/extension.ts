@@ -73,7 +73,10 @@ export function activate(context: vscode.ExtensionContext) {
     const historyManager = new HistoryManager(context, workspaceRoot);
 
     // Export metrics collector for use in LLM provider
-    vscode.extensions.getExtension('vibey.vibey')?.exports.metricsCollector = metricsCollector;
+    const vibeyExtension = vscode.extensions.getExtension('vibey.vibey');
+    if (vibeyExtension && vibeyExtension.exports) {
+        vibeyExtension.exports.metricsCollector = metricsCollector;
+    }
 
     // 2. Register Webview Provider
     const chatProvider = new ChatPanel(context.extensionUri, orchestrator, taskManager, historyManager);
