@@ -47,6 +47,7 @@ const patch_1 = require("./tools/definitions/patch");
 const tasks_1 = require("./tools/definitions/tasks");
 const task_manager_1 = require("./agent/task_manager");
 const ChatPanel_1 = require("./ui/ChatPanel");
+const MicPanel_1 = require("./ui/MicPanel");
 const terminal_1 = require("./agent/terminal");
 const terminal_2 = require("./tools/definitions/terminal");
 const editor_1 = require("./tools/definitions/editor");
@@ -129,6 +130,13 @@ function activate(context) {
             vscode.window.showErrorMessage(`Failed to select model: ${err.message}`);
         }
     });
+    // Voice Input Command - opens a WebviewPanel for microphone access
+    const voiceInputCommand = vscode.commands.registerCommand('vibey.voiceInput', () => {
+        MicPanel_1.MicPanel.createOrShow(context.extensionUri, (transcript) => {
+            // Send transcript to the chat panel
+            chatProvider.addTranscriptToInput(transcript);
+        });
+    });
     // MCP Commands
     const mcpStatusCommand = vscode.commands.registerCommand('vibey.mcpStatus', () => {
         if (!mcpService) {
@@ -172,6 +180,7 @@ function activate(context) {
     context.subscriptions.push(startCommand);
     context.subscriptions.push(settingsCommand);
     context.subscriptions.push(selectModelCommand);
+    context.subscriptions.push(voiceInputCommand);
     context.subscriptions.push(mcpStatusCommand);
     context.subscriptions.push(mcpReloadCommand);
     context.subscriptions.push(mcpListToolsCommand);

@@ -50,147 +50,12 @@ let isResumable = false;
 let taskFilters = { status: 'all', sort: 'date-desc' };
 let allTasks = [];
 
-// Initialize Voice Service - Push-to-Talk implementation
-let voiceService = {
-    isSupported: 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window,
-    isListening: false,
-    recognition: null,
-    transcript: '',
-
-    startListening: function() {
-        if (!this.isSupported) {
-            console.error('Speech recognition not supported');
-            return;
-        }
-
-        if (this.isListening) return;
-
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        this.recognition = new SpeechRecognition();
-        this.recognition.continuous = true;  // Keep listening while button is held
-        this.recognition.interimResults = true;  // Get results as we speak
-        this.recognition.lang = 'en-US';
-        this.transcript = '';
-
-        this.recognition.onresult = (event) => {
-            let finalTranscript = '';
-            let interimTranscript = '';
-
-            for (let i = event.resultIndex; i < event.results.length; i++) {
-                const result = event.results[i];
-                if (result.isFinal) {
-                    finalTranscript += result[0].transcript;
-                } else {
-                    interimTranscript += result[0].transcript;
-                }
-            }
-
-            // Update the cumulative transcript with final results
-            if (finalTranscript) {
-                this.transcript += finalTranscript + ' ';
-            }
-
-            // Show interim results in the input box (preview)
-            if (inputBox) {
-                const existingText = inputBox.dataset.originalText || '';
-                inputBox.value = existingText + this.transcript + interimTranscript;
-            }
-        };
-
-        this.recognition.onerror = (event) => {
-            console.error('Speech recognition error:', event.error);
-            // Don't stop on 'no-speech' error - user might just be pausing
-            if (event.error !== 'no-speech') {
-                this.stopListening();
-            }
-        };
-
-        this.recognition.onend = () => {
-            // If we're still supposed to be listening (button still held), restart
-            if (this.isListening) {
-                try {
-                    this.recognition.start();
-                } catch (e) {
-                    console.error('Failed to restart recognition:', e);
-                }
-            }
-        };
-
-        // Save original text before we start
-        if (inputBox) {
-            inputBox.dataset.originalText = inputBox.value;
-        }
-
-        this.isListening = true;
-        if (micBtn) micBtn.classList.add('listening');
-
-        try {
-            this.recognition.start();
-        } catch (e) {
-            console.error('Failed to start recognition:', e);
-            this.isListening = false;
-            if (micBtn) micBtn.classList.remove('listening');
-        }
-    },
-
-    stopListening: function() {
-        this.isListening = false;
-        if (micBtn) micBtn.classList.remove('listening');
-
-        if (this.recognition) {
-            try {
-                this.recognition.stop();
-            } catch (e) {
-                console.error('Failed to stop recognition:', e);
-            }
-            this.recognition = null;
-        }
-
-        // Finalize the transcript into the input box
-        if (inputBox) {
-            const originalText = inputBox.dataset.originalText || '';
-            const finalText = originalText + this.transcript.trim();
-            inputBox.value = finalText;
-            delete inputBox.dataset.originalText;
-            updateSendButtonState();
-            inputBox.focus();
-        }
-
-        this.transcript = '';
-    }
-};
-
-// Check if voice service is supported
-if (!voiceService.isSupported) {
-    if (micBtn) micBtn.style.display = 'none';
-} else if (micBtn) {
-    // Set up push-to-talk: mousedown to start, mouseup to stop
-    micBtn.addEventListener('mousedown', (e) => {
+// Mic button opens a separate WebviewPanel with proper mic permissions
+if (micBtn) {
+    micBtn.addEventListener('click', (e) => {
         e.preventDefault();
-        voiceService.startListening();
-    });
-
-    micBtn.addEventListener('mouseup', (e) => {
-        e.preventDefault();
-        voiceService.stopListening();
-    });
-
-    // Handle mouse leaving the button while pressed
-    micBtn.addEventListener('mouseleave', () => {
-        if (voiceService.isListening) {
-            voiceService.stopListening();
-        }
-    });
-
-    // Touch support for mobile/tablet
-    micBtn.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        voiceService.startListening();
-    });
-
-    micBtn.addEventListener('touchend', (e) => {
-        e.preventDefault();
-        voiceService.stopListening();
+        // Request the extension to open the MicPanel
+        vscode.postMessage({ type: 'voiceInput' });
     });
 }
 
@@ -210,21 +75,9 @@ function updateSendButtonState() {
     }
 }
 
-// Legacy toggleSpeech function (for keyboard shortcut compatibility)
-function toggleSpeech() {
-    if (!voiceService.isSupported) return;
-
-    if (voiceService.isListening) {
-        voiceService.stopListening();
-    } else {
-        voiceService.startListening();
-        // Auto-stop after 10 seconds for keyboard shortcut
-        setTimeout(() => {
-            if (voiceService.isListening) {
-                voiceService.stopListening();
-            }
-        }, 10000);
-    }
+// Open voice input panel (keyboard shortcut)
+function openVoiceInput() {
+    vscode.postMessage({ type: 'voiceInput' });
 }
 
 
@@ -743,12 +596,10 @@ document.addEventListener('keydown', (e) => {
             handleSendClick();
         }
     }
-    // Ctrl/Cmd + Shift + M: Toggle mic
+    // Ctrl/Cmd + Shift + M: Open voice input
     if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'M') {
         e.preventDefault();
-        if (micBtn && micBtn.style.display !== 'none') {
-            toggleSpeech();
-        }
+        openVoiceInput();
     }
     // Escape: Stop processing
     if (e.key === 'Escape' && isProcessing) {

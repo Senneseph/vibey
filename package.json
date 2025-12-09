@@ -3,7 +3,7 @@
     "displayName": "Vibey",
     "description": "Offline-first AI Coding Agent",
     "publisher": "vibey-project",
-    "version": "0.3.8",
+    "version": "0.4.2",
     "icon": "icon.png",
     "repository": {
         "type": "git",
@@ -91,6 +91,11 @@
                 "command": "vibey.selectModel",
                 "title": "Vibey: Select Model",
                 "icon": "$(server-process)"
+            },
+            {
+                "command": "vibey.voiceInput",
+                "title": "Vibey: Voice Input",
+                "icon": "$(mic)"
             },
             {
                 "command": "vibey.mcpStatus",

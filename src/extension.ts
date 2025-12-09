@@ -11,6 +11,7 @@ import { createPatchTools } from './tools/definitions/patch';
 import { createManageTaskTool } from './tools/definitions/tasks';
 import { TaskManager } from './agent/task_manager';
 import { ChatPanel } from './ui/ChatPanel';
+import { MicPanel } from './ui/MicPanel';
 
 import { VibeyTerminalManager } from './agent/terminal';
 import { createTerminalTools } from './tools/definitions/terminal';
@@ -121,6 +122,14 @@ export function activate(context: vscode.ExtensionContext) {
         }
     });
 
+    // Voice Input Command - opens a WebviewPanel for microphone access
+    const voiceInputCommand = vscode.commands.registerCommand('vibey.voiceInput', () => {
+        MicPanel.createOrShow(context.extensionUri, (transcript: string) => {
+            // Send transcript to the chat panel
+            chatProvider.addTranscriptToInput(transcript);
+        });
+    });
+
     // MCP Commands
     const mcpStatusCommand = vscode.commands.registerCommand('vibey.mcpStatus', () => {
         if (!mcpService) {
@@ -170,6 +179,7 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(startCommand);
     context.subscriptions.push(settingsCommand);
     context.subscriptions.push(selectModelCommand);
+    context.subscriptions.push(voiceInputCommand);
     context.subscriptions.push(mcpStatusCommand);
     context.subscriptions.push(mcpReloadCommand);
     context.subscriptions.push(mcpListToolsCommand);

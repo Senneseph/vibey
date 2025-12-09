@@ -243,16 +243,20 @@ class ChatPanel {
         });
     }
     async handleVoiceInput() {
-        // Voice input is now handled entirely on the frontend (webview)
-        // This method is kept for backwards compatibility but voice logic moved to main.js
-        try {
-            // Notify webview to start voice input (webview has the speech recognition)
-            if (this.webviewReady) {
-                this._view?.webview.postMessage({ type: 'startVoiceInput' });
-            }
-        }
-        catch (error) {
-            console.error('Voice input error:', error);
+        // Voice input now uses MicPanel (separate WebviewPanel with mic permissions)
+        // Trigger the voiceInput command which opens the MicPanel
+        vscode.commands.executeCommand('vibey.voiceInput');
+    }
+    /**
+     * Add transcribed text to the chat input box
+     * Called from MicPanel when user sends their voice transcript
+     */
+    addTranscriptToInput(text) {
+        if (this.webviewReady && text) {
+            this._view?.webview.postMessage({
+                type: 'voiceInputReceived',
+                text: text
+            });
         }
     }
     _getHtmlForWebview(webview) {
