@@ -1,5 +1,9 @@
 # Source files (compiled to out/)
+# Exclude all src except UI media (CSS/JS for webview)
 src/**
+!src/ui/
+!src/ui/media/
+!src/ui/media/**
 **/*.ts
 
 # Development config
