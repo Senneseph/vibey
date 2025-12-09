@@ -1,41 +1,12 @@
 "use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AgentOrchestrator = void 0;
-const vscode = __importStar(require("vscode"));
 const context_manager_1 = require("./context_manager");
+const context_utils_1 = require("./context_utils");
+const llm_utils_1 = require("./llm_utils");
+const tool_utils_1 = require("./tool_utils");
+const history_utils_1 = require("./history_utils");
+const error_utils_1 = require("./error_utils");
 class AgentOrchestrator {
     cancel() {
         if (this.abortController) {
@@ -110,156 +81,84 @@ When you are DONE with the entire task and have nothing more to do, respond with
 `;
     }
     async chat(userMessage, contextItems, onUpdate) {
-        // Cancel any previous running request
-        if (this.abortController) {
-            this.abortController.abort();
-        }
+        (0, error_utils_1.handleAbort)(this.abortController);
         this.abortController = new AbortController();
         const signal = this.abortController.signal;
         try {
-            // Resolve context if any
-            let fullMessage = userMessage;
-            if (contextItems && contextItems.length > 0) {
-                const contextBlock = await this.contextManager.resolveContext(contextItems);
-                fullMessage += contextBlock;
-            }
-            // 1. Add user message
-            this.context.history.push({ role: 'user', content: fullMessage });
+            // Context block
+            const contextBlock = contextItems && contextItems.length > 0
+                ? await (0, context_utils_1.getContextForTask)(this.contextManager, userMessage, contextItems)
+                : '';
+            (0, history_utils_1.pushHistory)(this.context.history, { role: 'user', content: userMessage + contextBlock });
+            if (onUpdate)
+                onUpdate({ type: 'thinking', message: 'Strategic planning with full context window...' });
+            const MAX_TURNS = 256;
             let turns = 0;
-            const config = vscode.workspace.getConfiguration('vibey');
-            const MAX_TURNS = config.get('maxTurns') || 64;
+            let finalResponse = '';
             while (turns < MAX_TURNS) {
                 if (signal.aborted)
                     throw new Error('Request cancelled by user');
                 turns++;
-                // 2. Call LLM
                 if (onUpdate)
-                    onUpdate({ type: 'thinking', message: turns === 1 ? 'Analyzing request...' : `Turn ${turns}/${MAX_TURNS}: Reasoning...` });
-                const responseText = await this.llm.chat(this.context.history, signal);
+                    onUpdate({ type: 'thinking', message: turns === 1 ? 'Analyzing request...' : `Turn ${turns}: Reasoning...` });
+                const responseText = await (0, llm_utils_1.callLLM)(this.llm, this.context.history, signal);
                 if (signal.aborted)
                     throw new Error('Request cancelled by user');
-                // 3. Parse Response
-                // Check for JSON block - handle both \n and \r\n line endings
-                // First try fenced code block (preferred), then try to find a JSON object
-                const fencedMatch = responseText.match(/```json[\r\n]+([\s\S]*?)[\r\n]+```/);
-                let parsed;
-                let jsonContent = null;
-                if (fencedMatch) {
-                    // Found fenced JSON block - extract and clean the content
-                    jsonContent = fencedMatch[1].trim();
-                    // Sometimes LLMs duplicate the "json" word inside the block - strip it
-                    if (jsonContent.startsWith('json')) {
-                        jsonContent = jsonContent.slice(4).trim();
-                    }
+                const parsed = (0, llm_utils_1.parseLLMResponse)(responseText);
+                if (!parsed || parsed.text) {
+                    (0, history_utils_1.pushHistory)(this.context.history, { role: 'assistant', content: responseText });
+                    finalResponse = responseText;
+                    break;
                 }
-                else {
-                    // Try to find a JSON object that looks like a tool call
-                    // Look for {"thought": or {"tool_calls": pattern
-                    const toolCallPattern = /(\{\s*"(?:thought|tool_calls)"[\s\S]*?\})\s*$/;
-                    const jsonMatch = responseText.match(toolCallPattern);
-                    if (jsonMatch) {
-                        jsonContent = jsonMatch[1];
-                    }
-                }
-                if (!jsonContent) {
-                    // No tool call, just a text response.
-                    this.context.history.push({ role: 'assistant', content: responseText });
-                    return responseText;
-                }
-                // Try to parse the JSON
-                try {
-                    parsed = JSON.parse(jsonContent);
-                }
-                catch (e) {
-                    // JSON parsing failed - this could be truncated or malformed
-                    console.error('[Orchestrator] Failed to parse JSON:', e, 'Content:', jsonContent.substring(0, 200));
-                    this.context.history.push({ role: 'assistant', content: responseText });
-                    return responseText;
-                }
-                // Validate that we have a proper tool call structure
-                if (!parsed || typeof parsed !== 'object') {
-                    this.context.history.push({ role: 'assistant', content: responseText });
-                    return responseText;
-                }
-                // Emit thought if present
                 if (parsed.thought && onUpdate) {
                     onUpdate({ type: 'thought', message: parsed.thought });
                 }
-                // 4. Execute Tools
                 if (parsed.tool_calls && Array.isArray(parsed.tool_calls)) {
-                    this.context.history.push({ role: 'assistant', content: responseText });
-                    // Execute sequentially
+                    (0, history_utils_1.pushHistory)(this.context.history, { role: 'assistant', content: responseText });
                     for (const call of parsed.tool_calls) {
                         if (signal.aborted)
                             throw new Error('Request cancelled by user');
                         try {
                             if (onUpdate)
-                                onUpdate({
-                                    type: 'tool_start',
-                                    id: call.id,
-                                    tool: call.name,
-                                    parameters: call.parameters
-                                });
-                            const result = await this.tools.executeTool(call);
+                                onUpdate({ type: 'tool_start', id: call.id, tool: call.name, parameters: call.parameters });
+                            const result = await (0, tool_utils_1.executeTool)(this.tools, call);
                             if (onUpdate)
-                                onUpdate({
-                                    type: 'tool_end',
-                                    id: call.id,
-                                    tool: call.name,
-                                    success: true,
-                                    result: result
-                                });
-                            this.context.history.push({
-                                role: 'tool',
-                                content: JSON.stringify(result)
-                            });
+                                onUpdate({ type: 'tool_end', id: call.id, tool: call.name, success: true, result });
+                            (0, tool_utils_1.handleToolResult)(this.context.history, result, call);
                         }
                         catch (error) {
                             if (onUpdate)
-                                onUpdate({
-                                    type: 'tool_end',
-                                    id: call.id,
-                                    tool: call.name,
-                                    success: false,
-                                    error: error.message
-                                });
-                            this.context.history.push({
-                                role: 'tool',
-                                content: JSON.stringify({
-                                    role: 'tool_result',
-                                    tool_call_id: call.id,
-                                    status: 'error',
-                                    error: error.message
-                                })
-                            });
+                                onUpdate({ type: 'tool_end', id: call.id, tool: call.name, success: false, error: error.message });
+                            (0, tool_utils_1.handleToolResult)(this.context.history, { status: 'error', error: error.message }, call);
                         }
                     }
-                    // Loop continues to let LLM see tool output
                 }
                 else {
-                    // Just thought/JSON response without tools
-                    this.context.history.push({ role: 'assistant', content: responseText });
-                    return parsed.thought || responseText;
+                    (0, history_utils_1.pushHistory)(this.context.history, { role: 'assistant', content: responseText });
+                    finalResponse = parsed.thought || responseText;
+                    break;
                 }
             }
             this.abortController = null;
-            // Limit reached: Self-Reflection Turn
+            if (finalResponse) {
+                return finalResponse;
+            }
             if (onUpdate)
                 onUpdate({ type: 'thinking', message: 'Max turns reached. Summarizing progress...' });
-            this.context.history.push({
+            (0, history_utils_1.pushHistory)(this.context.history, {
                 role: 'user',
                 content: "You have reached the maximum number of turns. Please provide a concise summary of what you have accomplished so far, what issues you encountered, and what steps should be taken next to complete the task."
             });
-            const summary = await this.llm.chat(this.context.history, signal);
-            this.context.history.push({ role: 'assistant', content: summary });
+            const summary = await (0, llm_utils_1.callLLM)(this.llm, this.context.history, signal);
+            (0, history_utils_1.pushHistory)(this.context.history, { role: 'assistant', content: summary });
             return `**Max Turns Reached (${MAX_TURNS})**\n\n${summary}`;
         }
         catch (error) {
             this.abortController = null;
-            if (error.message === 'Request cancelled by user') {
-                return 'Request cancelled.';
-            }
-            throw error;
+            const errorMsg = (0, error_utils_1.formatError)(error);
+            if (onUpdate)
+                onUpdate({ type: 'error', message: errorMsg });
+            return `**Error:** ${errorMsg}`;
         }
     }
 }
