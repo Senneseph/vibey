@@ -358,6 +358,18 @@ body.theme-light {
     background: var(--vscode-toolbar-hoverBackground);
 }
 
+.icon-btn.listening {
+    animation: pulse 1.5s infinite;
+    background: var(--vscode-errorForeground) !important;
+    color: white !important;
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
 
 #send-btn {
     background: var(--vscode-button-background);

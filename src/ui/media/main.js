@@ -50,36 +50,60 @@ let isResumable = false;
 let taskFilters = { status: 'all', sort: 'date-desc' };
 let allTasks = [];
 
-// Initialize Speech Recognition
-if ('webkitSpeechRecognition' in window) {
-    recognition = new webkitSpeechRecognition();
-    recognition.continuous = false;
-    recognition.interimResults = false;
+// Initialize Voice Service
+let voiceService = {
+    isSupported: 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window,
+    isListening: false,
+    start: function() {
+        return new Promise((resolve, reject) => {
+            if (!this.isSupported) {
+                reject(new Error('Speech recognition not supported')); 
+                return;
+            }
+            
+            if (this.isListening) {
+                reject(new Error('Already listening')); 
+                return;
+            }
+            
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            const recognition = new SpeechRecognition();
+            recognition.continuous = false;
+            recognition.interimResults = false;
+            recognition.lang = 'en-US';
+            
+            recognition.onresult = (event) => {
+                if (event.results && event.results.length > 0) {
+                    const transcript = event.results[0][0].transcript;
+                    resolve(transcript);
+                } else {
+                    reject(new Error('No speech detected'));
+                }
+                this.isListening = false;
+                micBtn.classList.remove('listening');
+            };
+            
+            recognition.onerror = (event) => {
+                console.error('Speech recognition error', event.error);
+                this.isListening = false;
+                micBtn.classList.remove('listening');
+                reject(new Error(`Speech recognition error: ${event.error}`));
+            };
+            
+            recognition.onend = () => {
+                this.isListening = false;
+                micBtn.classList.remove('listening');
+            };
+            
+            this.isListening = true;
+            micBtn.classList.add('listening');
+            recognition.start();
+        });
+    }
+};
 
-    recognition.onstart = () => {
-        isListening = true;
-        micBtn.classList.add('listening');
-    };
-
-    recognition.onend = () => {
-        isListening = false;
-        micBtn.classList.remove('listening');
-    };
-
-    recognition.onresult = (event) => {
-        const transcript = event.results[0][0].transcript;
-        inputBox.value += (inputBox.value ? ' ' : '') + transcript;
-        inputBox.focus();
-        updateSendButtonState();
-    };
-
-    recognition.onerror = (event) => {
-        console.error('Speech recognition error', event.error);
-        isListening = false;
-        micBtn.classList.remove('listening');
-    };
-} else {
-    // micBtn might be hidden in CSS if not supported, or we can hide it here
+// Check if voice service is supported
+if (!voiceService.isSupported) {
     if (micBtn) micBtn.style.display = 'none';
 }
 
@@ -101,11 +125,16 @@ function updateSendButtonState() {
 
 // Handlers
 function toggleSpeech() {
-    if (!recognition) return;
-    if (isListening) {
-        recognition.stop();
+    if (!voiceService.isSupported) return;
+    
+    if (voiceService.isListening) {
+        // Currently we don't have a way to stop the recognition in the browser,
+        // so we just update the UI
+        voiceService.isListening = false;
+        micBtn.classList.remove('listening');
     } else {
-        recognition.start();
+        // Request voice input from extension
+        vscode.postMessage({ type: 'voiceInput' });
     }
 }
 
@@ -562,6 +591,30 @@ window.addEventListener('message', event => {
             break;
         case 'agentUpdate':
             handleAgentUpdate(message.update);
+            break;
+        case 'voiceInputStarted':
+            // Update UI to show listening state
+            micBtn.classList.add('listening');
+            break;
+        case 'voiceInputReceived':
+            // Add the voice transcript to the input box
+            if (message.text) {
+                inputBox.value += (inputBox.value ? ' ' : '') + message.text;
+                inputBox.focus();
+                updateSendButtonState();
+            }
+            micBtn.classList.remove('listening');
+            break;
+        case 'voiceInputError':
+            // Show error to user
+            console.error('Voice input error:', message.message);
+            micBtn.classList.remove('listening');
+            if (message.message) {
+                vscode.postMessage({
+                    type: 'error',
+                    message: `Voice input error: ${message.message}`
+                });
+            }
             break;
     }
 });
