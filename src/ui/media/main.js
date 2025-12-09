@@ -458,6 +458,12 @@ window.addEventListener('message', event => {
             chatContainer.innerHTML = '';
             if (message.messages && Array.isArray(message.messages)) {
                 message.messages.forEach(msg => {
+                    // Restore agent updates (tool calls, thoughts) before the message
+                    if (msg.agentUpdates && Array.isArray(msg.agentUpdates)) {
+                        msg.agentUpdates.forEach(update => {
+                            handleAgentUpdate(update);
+                        });
+                    }
                     renderMessage(msg.role, msg.content);
                 });
             }
