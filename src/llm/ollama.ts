@@ -2,6 +2,7 @@
 import * as vscode from 'vscode';
 import { LLMProvider, ChatMessage } from '../agent/types';
 import { ToolCall } from '../tools/schema';
+import { getMetricsCollector } from '../extension';
 
 interface OllamaResponse {
     model: string;
@@ -11,6 +12,8 @@ interface OllamaResponse {
         content: string;
     };
     done: boolean;
+    prompt_eval_count?: number;  // Number of tokens in the prompt
+    eval_count?: number;          // Number of tokens in the response
 }
 
 export class OllamaClient implements LLMProvider {
@@ -58,6 +61,15 @@ export class OllamaClient implements LLMProvider {
             }
 
             const data = await response.json() as OllamaResponse;
+
+            // Track token usage
+            const metricsCollector = getMetricsCollector();
+            if (metricsCollector && data.prompt_eval_count !== undefined) {
+                metricsCollector.record('tokens_sent', data.prompt_eval_count);
+            }
+            if (metricsCollector && data.eval_count !== undefined) {
+                metricsCollector.record('tokens_received', data.eval_count);
+            }
 
             return data.message.content;
 

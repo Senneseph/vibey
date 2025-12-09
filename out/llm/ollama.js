@@ -35,6 +35,7 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.OllamaClient = void 0;
 const vscode = __importStar(require("vscode"));
+const extension_1 = require("../extension");
 class OllamaClient {
     constructor() { }
     getConfig() {
@@ -73,6 +74,14 @@ class OllamaClient {
                 throw new Error(`Ollama API error: ${response.statusText}`);
             }
             const data = await response.json();
+            // Track token usage
+            const metricsCollector = (0, extension_1.getMetricsCollector)();
+            if (metricsCollector && data.prompt_eval_count !== undefined) {
+                metricsCollector.record('tokens_sent', data.prompt_eval_count);
+            }
+            if (metricsCollector && data.eval_count !== undefined) {
+                metricsCollector.record('tokens_received', data.eval_count);
+            }
             return data.message.content;
         }
         catch (error) {

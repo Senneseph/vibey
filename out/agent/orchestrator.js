@@ -7,6 +7,7 @@ const llm_utils_1 = require("./llm_utils");
 const tool_utils_1 = require("./tool_utils");
 const history_utils_1 = require("./history_utils");
 const error_utils_1 = require("./error_utils");
+const extension_1 = require("../extension");
 class AgentOrchestrator {
     cancel() {
         if (this.abortController) {
@@ -141,6 +142,20 @@ When you are DONE with the entire task and have nothing more to do, respond with
             }
             this.abortController = null;
             if (finalResponse) {
+                // Add token summary if available
+                const metricsCollector = (0, extension_1.getMetricsCollector)();
+                if (metricsCollector) {
+                    // Get token summary for this conversation
+                    const tokensSent = metricsCollector.getSummary('tokens_sent')?.currentValue || 0;
+                    const tokensReceived = metricsCollector.getSummary('tokens_received')?.currentValue || 0;
+                    if (onUpdate) {
+                        onUpdate({
+                            type: 'tokens',
+                            sent: tokensSent,
+                            received: tokensReceived
+                        });
+                    }
+                }
                 return finalResponse;
             }
             if (onUpdate)
@@ -151,6 +166,19 @@ When you are DONE with the entire task and have nothing more to do, respond with
             });
             const summary = await (0, llm_utils_1.callLLM)(this.llm, this.context.history, signal);
             (0, history_utils_1.pushHistory)(this.context.history, { role: 'assistant', content: summary });
+            // Add token summary if available
+            const metricsCollector = (0, extension_1.getMetricsCollector)();
+            if (metricsCollector) {
+                const tokensSent = metricsCollector.getSummary('tokens_sent')?.currentValue || 0;
+                const tokensReceived = metricsCollector.getSummary('tokens_received')?.currentValue || 0;
+                if (onUpdate) {
+                    onUpdate({
+                        type: 'tokens',
+                        sent: tokensSent,
+                        received: tokensReceived
+                    });
+                }
+            }
             return `**Max Turns Reached (${MAX_TURNS})**\n\n${summary}`;
         }
         catch (error) {

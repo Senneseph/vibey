@@ -34,6 +34,7 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.activate = activate;
+exports.getMetricsCollector = getMetricsCollector;
 exports.deactivate = deactivate;
 const vscode = __importStar(require("vscode"));
 const path = __importStar(require("path"));
@@ -51,9 +52,11 @@ const terminal_2 = require("./tools/definitions/terminal");
 const editor_1 = require("./tools/definitions/editor");
 const history_manager_1 = require("./agent/history_manager");
 const mcp_service_1 = require("./agent/mcp/mcp_service");
+const metrics_collector_1 = require("./agent/metrics/metrics_collector");
 // Module-level references for cleanup
 let mcpService;
 let terminalManager;
+let metricsCollector;
 function activate(context) {
     console.log('Vibey is now active!');
     // 1. Initialize Components
@@ -61,6 +64,8 @@ function activate(context) {
         ? vscode.workspace.workspaceFolders[0].uri.fsPath
         : process.cwd();
     console.log('Vibey Workspace Root:', workspaceRoot);
+    // Initialize metrics collector
+    metricsCollector = new metrics_collector_1.MetricsCollector(context);
     const policy = new policy_engine_1.PolicyEngine(workspaceRoot);
     const gateway = new gateway_1.ToolGateway(policy);
     const taskManager = new task_manager_1.TaskManager();
@@ -87,6 +92,8 @@ function activate(context) {
     const llm = new ollama_1.OllamaClient();
     const orchestrator = new orchestrator_1.AgentOrchestrator(llm, gateway, workspaceRoot);
     const historyManager = new history_manager_1.HistoryManager(context, workspaceRoot);
+    // Export metrics collector for use in LLM provider
+    vscode.extensions.getExtension('vibey.vibey')?.exports.metricsCollector = metricsCollector;
     // 2. Register Webview Provider
     const chatProvider = new ChatPanel_1.ChatPanel(context.extensionUri, orchestrator, taskManager, historyManager);
     // Register for Primary Sidebar
@@ -165,6 +172,9 @@ function activate(context) {
     context.subscriptions.push(mcpStatusCommand);
     context.subscriptions.push(mcpReloadCommand);
     context.subscriptions.push(mcpListToolsCommand);
+}
+function getMetricsCollector() {
+    return metricsCollector;
 }
 async function deactivate() {
     if (mcpService) {

@@ -17,10 +17,12 @@ import { createTerminalTools } from './tools/definitions/terminal';
 import { createEditorTools } from './tools/definitions/editor';
 import { HistoryManager } from './agent/history_manager';
 import { McpService } from './agent/mcp/mcp_service';
+import { MetricsCollector } from './agent/metrics/metrics_collector';
 
 // Module-level references for cleanup
 let mcpService: McpService | undefined;
 let terminalManager: VibeyTerminalManager | undefined;
+let metricsCollector: MetricsCollector | undefined;
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('Vibey is now active!');
@@ -31,6 +33,9 @@ export function activate(context: vscode.ExtensionContext) {
         : process.cwd();
 
     console.log('Vibey Workspace Root:', workspaceRoot);
+
+    // Initialize metrics collector
+    metricsCollector = new MetricsCollector(context);
 
     const policy = new PolicyEngine(workspaceRoot);
     const gateway = new ToolGateway(policy);
@@ -66,6 +71,9 @@ export function activate(context: vscode.ExtensionContext) {
     const orchestrator = new AgentOrchestrator(llm, gateway, workspaceRoot);
 
     const historyManager = new HistoryManager(context, workspaceRoot);
+
+    // Export metrics collector for use in LLM provider
+    vscode.extensions.getExtension('vibey.vibey')?.exports.metricsCollector = metricsCollector;
 
     // 2. Register Webview Provider
     const chatProvider = new ChatPanel(context.extensionUri, orchestrator, taskManager, historyManager);
@@ -162,6 +170,10 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(mcpStatusCommand);
     context.subscriptions.push(mcpReloadCommand);
     context.subscriptions.push(mcpListToolsCommand);
+}
+
+export function getMetricsCollector(): MetricsCollector | undefined {
+    return metricsCollector;
 }
 
 export async function deactivate() {
