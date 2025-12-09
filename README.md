@@ -15,7 +15,6 @@
     - **MCP Support**: Connect to Model Context Protocol servers for infinite extensibility.
     - **Browser Automation**: (Coming Soon) Control web browsers for testing.
 - **Persistent Memory**: Chat history and task state are preserved across sessions.
-- **Voice Input**: Talk to your agent directly.
 
 ## Getting Started
 
