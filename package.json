@@ -3,7 +3,7 @@
     "displayName": "Vibey",
     "description": "Offline-first AI Coding Agent",
     "publisher": "vibey-project",
-    "version": "0.4.3",
+    "version": "0.4.4",
     "icon": "icon.png",
     "repository": {
         "type": "git",
@@ -28,7 +28,7 @@
                 },
                 "vibey.model": {
                     "type": "string",
-                    "default": "Qwen3-coder-roo-config:latest",
+                    "default": "Qwen3-coder:latest",
                     "description": "Name of the model to use in Ollama"
                 },
                 "vibey.autoRunTools": {
@@ -36,11 +36,7 @@
                     "default": false,
                     "description": "If true, non-critical tools will run without approval (Use with caution)"
                 },
-                "vibey.maxTurns": {
-                    "type": "number",
-                    "default": 64,
-                    "description": "Maximum number of autonomous turns the agent can take before stopping or summarizing. Increase for complex tasks."
-                },
+                
                 "vibey.mcpServers": {
                     "type": "object",
                     "default": {},
