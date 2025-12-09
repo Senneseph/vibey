@@ -1,40 +1,41 @@
 // Main entry point that imports and initializes all modules
 
 // Import all modules
-import { applyTheme } from './theme_manager.js';
+import { vscode } from './vscode_api.js';
+import { applyTheme, initThemeManager } from './theme_manager.js';
 import { renderMessage, handleAgentUpdate } from './message_renderer.js';
-import { 
-    contextFiles, 
-    handleSendClick, 
-    sendMessage, 
-    setProcessing, 
-    updateSendButtonState, 
-    renderContext 
+import {
+    initializeDOMElements,
+    getChatContainer,
+    contextFiles,
+    handleSendClick,
+    sendMessage,
+    setProcessing,
+    updateSendButtonState,
+    renderContext
 } from './chat_manager.js';
-import { 
-    allTasks, 
-    taskFilters, 
-    renderTasks, 
-    filterAndRenderTasks, 
-    updateTaskFilter 
+import {
+    allTasks,
+    setAllTasks,
+    filterAndRenderTasks
 } from './task_manager.js';
-import { 
-    openVoiceInput, 
-    setupTabs, 
-    setupKeyboardShortcuts 
+import {
+    setupTabs,
+    setupKeyboardShortcuts,
+    initializeEventElements
 } from './events.js';
-import { 
-    handleVoiceInputStarted, 
-    handleVoiceInputReceived, 
-    handleVoiceInputError 
-} from './voice_input.js';
+
 
 // Initialize the application
 function initApp() {
+    // Initialize DOM elements first
+    initializeDOMElements();
+    initializeEventElements();
+    // Initialize theme manager
+    initThemeManager();
     // Setup tabs and keyboard shortcuts
     setupTabs();
     setupKeyboardShortcuts();
-    
     // Signal to extension that webview is ready to receive messages
     vscode.postMessage({ type: 'webviewReady' });
 }
@@ -52,8 +53,12 @@ window.addEventListener('message', event => {
     const message = event.data;
     switch (message.type) {
         case 'restoreHistory':
+            console.log('[VIBEY][Webview] restoreHistory received:', message);
             // Clear existing messages and restore from history
-            chatContainer.innerHTML = '';
+            const chatContainer = getChatContainer();
+            if (chatContainer) {
+                chatContainer.innerHTML = '';
+            }
             if (message.messages && Array.isArray(message.messages)) {
                 message.messages.forEach(msg => {
                     // Restore agent updates (tool calls, thoughts) before the message
@@ -64,10 +69,14 @@ window.addEventListener('message', event => {
                     }
                     renderMessage(msg.role, msg.content);
                 });
+            } else {
+                console.log('[VIBEY][Webview] No messages in restoreHistory payload.');
             }
 
             // Scroll to bottom after restoring
-            chatContainer.scrollTop = chatContainer.scrollHeight;
+            if (chatContainer && chatContainer.scrollHeight > 0) {
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+            }
             break;
         case 'restoreState':
             if (message.busy) {
@@ -76,16 +85,17 @@ window.addEventListener('message', event => {
             break;
         case 'addMessage':
             renderMessage(message.role, message.content, message.timestamp);
-            chatContainer.scrollTop = chatContainer.scrollHeight;
+            const container = getChatContainer();
+            if (container) {
+                container.scrollTop = container.scrollHeight;
+            }
             break;
         case 'requestStopped':
-            isProcessing = false;
-            isResumable = true;
+            setProcessing(false, true);  // false for processing, true for resumable
             updateSendButtonState();
             break;
         case 'requestComplete':
-            isProcessing = false;
-            isResumable = false;
+            setProcessing(false, false);  // false for both processing and resumable
             updateSendButtonState();
             break;
         case 'appendContext':
@@ -93,21 +103,13 @@ window.addEventListener('message', event => {
             renderContext();
             break;
         case 'updateTasks':
-            allTasks = message.tasks || [];
+            setAllTasks(message.tasks || []);
             filterAndRenderTasks();
             break;
         case 'agentUpdate':
             handleAgentUpdate(message.update);
             break;
-        case 'voiceInputStarted':
-            handleVoiceInputStarted();
-            break;
-        case 'voiceInputReceived':
-            handleVoiceInputReceived(message.text);
-            break;
-        case 'voiceInputError':
-            handleVoiceInputError(message.message);
-            break;
+
     }
 });
 

@@ -1,4 +1,5 @@
-const vscode = acquireVsCodeApi();
+import { vscode } from './vscode_api.js';
+import { getChatContainer } from './chat_manager.js';
 
 // Helper to format tool parameters nicely
 function formatToolParams(name, params) {
@@ -44,7 +45,7 @@ function renderMessage(role, content, timestamp = null) {
         } catch (e) { }
 
         div.innerHTML = `<details><summary>Tool Output</summary><pre>${resultPretty}</pre></details>`;
-        chatContainer.appendChild(div);
+        getChatContainer().appendChild(div);
         return;
     }
 
@@ -109,9 +110,9 @@ function renderMessage(role, content, timestamp = null) {
             // Append message meta and content, then to chat
             messageWrapper.appendChild(messageMeta);
             messageWrapper.appendChild(messageContent);
-            chatContainer.appendChild(messageWrapper);
+            getChatContainer().appendChild(messageWrapper);
 
-            // If it was just JSON, we are done. 
+            // If it was just JSON, we are done.
             return;
         }
     }
@@ -134,7 +135,7 @@ function renderMessage(role, content, timestamp = null) {
 
     messageWrapper.appendChild(messageMeta);
     messageWrapper.appendChild(messageContent);
-    chatContainer.appendChild(messageWrapper);
+    getChatContainer().appendChild(messageWrapper);
 }
 
 function handleAgentUpdate(update) {
@@ -144,8 +145,8 @@ function handleAgentUpdate(update) {
         div.id = `tool-${update.id}`; // Use ID for updates
 
         div.innerHTML = `\n            <div class="tool-header">\n                <span class="tool-icon">⏳</span>\n                <span class="tool-name">${update.tool}</span>\n                <span class="tool-summary">${formatToolParams(update.tool, update.parameters)}</span>\n            </div>\n            <details class="tool-details">\n                <summary>Parameters</summary>\n                <pre>${JSON.stringify(update.parameters, null, 2)}</pre>\n            </details>\n        `;
-        chatContainer.appendChild(div);
-        chatContainer.scrollTop = chatContainer.scrollHeight;
+        getChatContainer().appendChild(div);
+        getChatContainer().scrollTop = getChatContainer().scrollHeight;
         return;
     }
 
@@ -178,9 +179,9 @@ function handleAgentUpdate(update) {
                 const resultText = typeof update.result === 'object' ? JSON.stringify(update.result, null, 2) : update.result;
                 fallbackDiv.innerHTML += `<details><summary>Result</summary><pre>${resultText}</pre></details>`;
             }
-            chatContainer.appendChild(fallbackDiv);
+            getChatContainer().appendChild(fallbackDiv);
         }
-        chatContainer.scrollTop = chatContainer.scrollHeight;
+        getChatContainer().scrollTop = getChatContainer().scrollHeight;
         return;
     }
 
@@ -199,8 +200,8 @@ function handleAgentUpdate(update) {
             div.innerHTML = `<strong>📊 Token Usage:</strong> ${update.sent} sent, ${update.received} received`;
             break;
     }
-    chatContainer.appendChild(div);
-    chatContainer.scrollTop = chatContainer.scrollHeight;
+    getChatContainer().appendChild(div);
+    getChatContainer().scrollTop = getChatContainer().scrollHeight;
 }
 
 // Export for use in other modules
