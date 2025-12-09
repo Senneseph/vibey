@@ -1,0 +1,37 @@
+# Source files (compiled to out/)
+src/**
+**/*.ts
+
+# Development config
+.vscode/**
+.git/**
+.gitignore
+.plan
+.env
+tsconfig.json
+
+# Documentation (except README)
+PROPOSAL.md
+IMPROVEMENT_PLAN.md
+KEY_IMPROVEMENT_AREAS.md
+TERMINAL_LIMITATIONS.md
+GENERATION_ALPHA.md
+
+# Test and demo files
+test_*.txt
+demo_*.txt
+verification.log
+output.png
+
+# Build artifacts
+*.vsix
+icon.svg
+
+# User data
+.vibey/**
+
+# All node_modules (bundled into dist/)
+node_modules/**
+
+# Old output folder (replaced by dist/)
+out/**
