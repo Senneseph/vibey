@@ -2,10 +2,22 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 
+interface AgentUpdate {
+    type: 'thought' | 'tool_start' | 'tool_end';
+    id?: string;
+    tool?: string;
+    parameters?: any;
+    success?: boolean;
+    result?: any;
+    error?: string;
+    message?: string;
+}
+
 interface ChatMessage {
     role: string;
     content: string;
     timestamp?: number;
+    agentUpdates?: AgentUpdate[];  // Store tool execution details with the message
 }
 
 interface ChatSession {

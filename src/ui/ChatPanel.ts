@@ -10,12 +10,13 @@ export class ChatPanel implements vscode.WebviewViewProvider {
     private _view?: vscode.WebviewView;
 
 
-    private currentHistory: { role: string; content: string }[] = [];
+    private currentHistory: { role: string; content: string; agentUpdates?: any[] }[] = [];
     private isGenerating: boolean = false;
     private webviewReady: boolean = false;
     private ongoingAgentProcess: { cancel: () => void; reconnect: (onUpdate: (update: any) => void) => void } | null = null;
     private lastAgentUpdate: any = null;
     private agentUpdatesBuffer: any[] = [];
+    private pendingAgentUpdates: any[] = [];  // Accumulate updates for current assistant response
 
     constructor(
         private readonly _extensionUri: vscode.Uri,
@@ -92,6 +93,7 @@ export class ChatPanel implements vscode.WebviewViewProvider {
 
                     this.isGenerating = true;
                     this.agentUpdatesBuffer = []; // Clear buffer for new session
+                    this.pendingAgentUpdates = []; // Clear pending updates for new response
 
                     // Call Agent with Context (Pass data.context)
                     let agentCancelled = false;
@@ -101,6 +103,8 @@ export class ChatPanel implements vscode.WebviewViewProvider {
                             this.lastAgentUpdate = update;
                             // Buffer updates for session preservation
                             this.agentUpdatesBuffer.push(update);
+                            // Accumulate updates for this response
+                            this.pendingAgentUpdates.push(update);
                             if (this.webviewReady) {
                                 this._view?.webview.postMessage({ type: 'agentUpdate', update });
                             }
@@ -123,8 +127,12 @@ export class ChatPanel implements vscode.WebviewViewProvider {
                             this._view?.webview.postMessage({ type: 'addMessage', role: 'assistant', content: response });
                         }
 
-                        // 2. Add Assistant Message & Save
-                        this.currentHistory.push({ role: 'assistant', content: response });
+                        // 2. Add Assistant Message with agent updates & Save
+                        this.currentHistory.push({
+                            role: 'assistant',
+                            content: response,
+                            agentUpdates: [...this.pendingAgentUpdates]  // Save tool executions with the message
+                        });
                         await this.historyManager.saveHistory(this.currentHistory);
 
                         if (response !== 'Request cancelled.') {
