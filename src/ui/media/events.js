@@ -1,62 +1,58 @@
-const vscode = acquireVsCodeApi();
-const inputBox = document.getElementById('InputBox');
-const sendBtn = document.getElementById('send-btn');
-const attachBtn = document.getElementById('attach-btn');
-const micBtn = document.getElementById('mic-btn');
-const settingsBtn = document.getElementById('settings-btn');
-const modelsBtn = document.getElementById('models-btn');
-const contextArea = document.getElementById('context-area');
+import { vscode } from './vscode_api.js';
+import {
+    handleSendClick,
+    updateSendButtonState,
+    getIsProcessing,
+    getInputBox
+} from './chat_manager.js';
 
-// Mic button opens a separate WebviewPanel with proper mic permissions
-if (micBtn) {
-    micBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        // Request the extension to open the MicPanel
-        vscode.postMessage({ type: 'voiceInput' });
-    });
-}
+// DOM elements - lazy loaded
+let inputBox, sendBtn, attachBtn, settingsBtn, modelsBtn, contextArea;
 
-// Open voice input panel (keyboard shortcut)
-function openVoiceInput() {
-    vscode.postMessage({ type: 'voiceInput' });
-}
+function initializeEventElements() {
+    inputBox = document.getElementById('InputBox');
+    sendBtn = document.getElementById('send-btn');
+    attachBtn = document.getElementById('attach-btn');
+    settingsBtn = document.getElementById('settings-btn');
+    modelsBtn = document.getElementById('models-btn');
+    contextArea = document.getElementById('context-area');
 
-// Events
-if (sendBtn) sendBtn.addEventListener('click', handleSendClick);
+    // Send button
+    if (sendBtn) sendBtn.addEventListener('click', handleSendClick);
 
-if (inputBox) {
-    inputBox.addEventListener('input', () => {
-        // If user types, we leave "Resume" state and go to "Send" state
-        updateSendButtonState();
-    });
+    // Input box
+    if (inputBox) {
+        inputBox.addEventListener('input', () => {
+            // If user types, we leave "Resume" state and go to "Send" state
+            updateSendButtonState();
+        });
 
-    inputBox.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            // Enter always attempts to send or resume
-            handleSendClick();
-        }
-    });
-}
+        inputBox.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                // Enter always attempts to send or resume
+                handleSendClick();
+            }
+        });
+    }
 
-if (attachBtn) {
-    attachBtn.addEventListener('click', () => {
-        vscode.postMessage({ type: 'selectContext' });
-    });
-}
+    if (attachBtn) {
+        attachBtn.addEventListener('click', () => {
+            vscode.postMessage({ type: 'selectContext' });
+        });
+    }
 
-// Note: micBtn uses push-to-talk (mousedown/mouseup) handlers set up in voiceService initialization
+    if (modelsBtn) {
+        modelsBtn.addEventListener('click', () => {
+            vscode.postMessage({ type: 'selectModel' });
+        });
+    }
 
-if (modelsBtn) {
-    modelsBtn.addEventListener('click', () => {
-        vscode.postMessage({ type: 'selectModel' });
-    });
-}
-
-if (settingsBtn) {
-    settingsBtn.addEventListener('click', () => {
-        vscode.postMessage({ type: 'openSettings' });
-    });
+    if (settingsBtn) {
+        settingsBtn.addEventListener('click', () => {
+            vscode.postMessage({ type: 'openSettings' });
+        });
+    }
 }
 
 // Tabs
@@ -80,23 +76,24 @@ function setupTabs() {
     });
 }
 
+// Open voice input panel (keyboard shortcut)
+function openVoiceInput() {
+    vscode.postMessage({ type: 'voiceInput' });
+}
+
 // Keyboard shortcuts
 function setupKeyboardShortcuts() {
     document.addEventListener('keydown', (e) => {
         // Ctrl/Cmd + Enter: Send message
         if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-            if (document.activeElement === inputBox) {
+            const currentInputBox = getInputBox();
+            if (document.activeElement === currentInputBox) {
                 e.preventDefault();
                 handleSendClick();
             }
         }
-        // Ctrl/Cmd + Shift + M: Open voice input
-        if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'M') {
-            e.preventDefault();
-            openVoiceInput();
-        }
         // Escape: Stop processing
-        if (e.key === 'Escape' && isProcessing) {
+        if (e.key === 'Escape' && getIsProcessing()) {
             e.preventDefault();
             handleSendClick();
         }
@@ -105,7 +102,7 @@ function setupKeyboardShortcuts() {
 
 // Export for use in other modules
 export { 
-    openVoiceInput, 
+    initializeEventElements,
     setupTabs, 
     setupKeyboardShortcuts 
 };

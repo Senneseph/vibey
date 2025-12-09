@@ -1,8 +1,13 @@
-const vscode = acquireVsCodeApi();
+import { vscode } from './vscode_api.js';
 
 // Task management state
 let allTasks = [];
 let taskFilters = { status: 'all', sort: 'date-desc' };
+
+// Setter for allTasks (used by main.js)
+function setAllTasks(tasks) {
+    allTasks = tasks;
+}
 
 function renderTasks(tasks) {
     const list = document.getElementById('task-list');
@@ -56,10 +61,11 @@ function updateTaskFilter(status, sort) {
 }
 
 // Export for use in other modules
-export { 
-    allTasks, 
-    taskFilters, 
-    renderTasks, 
-    filterAndRenderTasks, 
-    updateTaskFilter 
+export {
+    allTasks,
+    setAllTasks,
+    taskFilters,
+    renderTasks,
+    filterAndRenderTasks,
+    updateTaskFilter
 };

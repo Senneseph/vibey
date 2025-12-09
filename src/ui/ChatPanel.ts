@@ -38,6 +38,7 @@ export class ChatPanel implements vscode.WebviewViewProvider {
 
         // Pre-load history before setting HTML
         this.currentHistory = await this.historyManager.loadHistory();
+        console.log('[VIBEY][ChatPanel] Loaded history:', this.currentHistory);
 
         webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
 
@@ -49,11 +50,15 @@ export class ChatPanel implements vscode.WebviewViewProvider {
                     this.webviewReady = true;
 
                     // Restore History
+                    console.log('[VIBEY][ChatPanel] webviewReady received. History:', this.currentHistory);
                     if (this.currentHistory.length > 0) {
+                        console.log('[VIBEY][ChatPanel] Posting restoreHistory to webview:', this.currentHistory);
                         this._view?.webview.postMessage({
                             type: 'restoreHistory',
                             messages: this.currentHistory
                         });
+                    } else {
+                        console.log('[VIBEY][ChatPanel] No history to restore.');
                     }
 
                     // Restore State (if mid-generation)
@@ -258,15 +263,13 @@ export class ChatPanel implements vscode.WebviewViewProvider {
 
     private _getHtmlForWebview(webview: vscode.Webview) {
         const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'src', 'ui', 'media', 'main.js'));
-        const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'src', 'ui', 'media', 'main.css'));
-
         return `<!DOCTYPE html>
         <html lang="en">
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <link href="${styleUri}" rel="stylesheet">
             <title>Vibey Chat</title>
+            <link rel="stylesheet" href="${webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'src', 'ui', 'media', 'main.css'))}">
         </head>
         <body>
             <div class="tabs">
@@ -279,14 +282,11 @@ export class ChatPanel implements vscode.WebviewViewProvider {
 
                 <div id="input-area">
                     <div id="context-area"></div>
-                    
                     <div class="input-container">
                         <textarea id="InputBox" placeholder="Ask Vibey... (Shift+Enter for new line)"></textarea>
-                        
                         <div class="input-actions">
                             <div class="toolbar">
                                 <button id="attach-btn" class="icon-btn" title="Add Context">📎</button>
-                                <button id="mic-btn" class="icon-btn" title="Voice Input">🎤</button>
                                 <button id="models-btn" class="icon-btn" title="Select Model">🤖</button>
                                 <button id="settings-btn" class="icon-btn" title="Settings">⚙️</button>
                             </div>
@@ -303,7 +303,7 @@ export class ChatPanel implements vscode.WebviewViewProvider {
                 </div>
             </div>
 
-            <script src="${scriptUri}"></script>
+            <script type="module" src="${scriptUri}"></script>
         </body>
         </html>`;
     }

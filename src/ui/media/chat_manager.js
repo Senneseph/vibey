@@ -1,8 +1,33 @@
-const vscode = acquireVsCodeApi();
-const chatContainer = document.getElementById('chat-container');
-const inputBox = document.getElementById('InputBox');
-const sendBtn = document.getElementById('send-btn');
-const attachBtn = document.getElementById('attach-btn');
+import { vscode } from './vscode_api.js';
+
+// DOM elements - lazy loaded to avoid null references
+let chatContainer = null;
+let inputBox = null;
+let sendBtn = null;
+let attachBtn = null;
+let contextArea = null;
+
+function initializeDOMElements() {
+    chatContainer = document.getElementById('chat-container');
+    inputBox = document.getElementById('InputBox');
+    sendBtn = document.getElementById('send-btn');
+    attachBtn = document.getElementById('attach-btn');
+    contextArea = document.getElementById('context-area');
+
+    if (!chatContainer || !inputBox || !sendBtn) {
+        console.error('Critical DOM elements not found');
+    }
+}
+
+// Getter for chatContainer (used by other modules)
+function getChatContainer() {
+    return chatContainer;
+}
+
+// Getter for inputBox (used by other modules)
+function getInputBox() {
+    return inputBox;
+}
 
 // State
 let contextFiles = [];
@@ -27,9 +52,9 @@ function updateSendButtonState() {
     }
 }
 
-function setProcessing(processing) {
+function setProcessing(processing, resumable = false) {
     isProcessing = processing;
-    isResumable = false; // Reset resume state when new request starts
+    isResumable = resumable;
     updateSendButtonState();
 }
 
@@ -97,11 +122,21 @@ function sendMessage() {
 }
 
 // Export for use in other modules
-export { 
-    contextFiles, 
-    handleSendClick, 
-    sendMessage, 
-    setProcessing, 
-    updateSendButtonState, 
-    renderContext 
+export {
+    vscode,
+    initializeDOMElements,
+    getChatContainer,
+    getInputBox,
+    contextFiles,
+    handleSendClick,
+    sendMessage,
+    setProcessing,
+    updateSendButtonState,
+    renderContext,
+    isProcessing
 };
+
+// Re-export isProcessing as a getter function for external modules
+export function getIsProcessing() {
+    return isProcessing;
+}
