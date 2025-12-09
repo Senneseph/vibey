@@ -375,6 +375,10 @@ function handleAgentUpdate(update) {
         case 'thought':
             div.innerHTML = `<details open><summary>Thinking Plan</summary><pre>${update.message}</pre></details>`;
             break;
+        case 'tokens':
+            // Display token usage information
+            div.innerHTML = `<strong>📊 Token Usage:</strong> ${update.sent} sent, ${update.received} received`;
+            break;
     }
     chatContainer.appendChild(div);
     chatContainer.scrollTop = chatContainer.scrollHeight;

@@ -8,6 +8,7 @@ import { callLLM, parseLLMResponse } from './llm_utils';
 import { executeTool, handleToolResult } from './tool_utils';
 import { pushHistory, getHistory } from './history_utils';
 import { formatError, handleAbort } from './error_utils';
+import { getMetricsCollector } from '../extension';
 
 export class AgentOrchestrator {
     private context: AgentContext;
@@ -145,6 +146,21 @@ When you are DONE with the entire task and have nothing more to do, respond with
             }
             this.abortController = null;
             if (finalResponse) {
+                // Add token summary if available
+                const metricsCollector = getMetricsCollector();
+                if (metricsCollector) {
+                    // Get token summary for this conversation
+                    const tokensSent = metricsCollector.getSummary('tokens_sent')?.currentValue || 0;
+                    const tokensReceived = metricsCollector.getSummary('tokens_received')?.currentValue || 0;
+                    
+                    if (onUpdate) {
+                        onUpdate({
+                            type: 'tokens',
+                            sent: tokensSent,
+                            received: tokensReceived
+                        });
+                    }
+                }
                 return finalResponse;
             }
             if (onUpdate) onUpdate({ type: 'thinking', message: 'Max turns reached. Summarizing progress...' });
@@ -154,6 +170,22 @@ When you are DONE with the entire task and have nothing more to do, respond with
             });
             const summary = await callLLM(this.llm, this.context.history, signal);
             pushHistory(this.context.history, { role: 'assistant', content: summary });
+            
+            // Add token summary if available
+            const metricsCollector = getMetricsCollector();
+            if (metricsCollector) {
+                const tokensSent = metricsCollector.getSummary('tokens_sent')?.currentValue || 0;
+                const tokensReceived = metricsCollector.getSummary('tokens_received')?.currentValue || 0;
+                
+                if (onUpdate) {
+                    onUpdate({
+                        type: 'tokens',
+                        sent: tokensSent,
+                        received: tokensReceived
+                    });
+                }
+            }
+            
             return `**Max Turns Reached (${MAX_TURNS})**\n\n${summary}`;
         } catch (error: any) {
             this.abortController = null;

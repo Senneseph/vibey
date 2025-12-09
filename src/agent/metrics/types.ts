@@ -139,6 +139,24 @@ export const BUILTIN_METRICS: MetricDefinition[] = [
         category: 'learning',
         aggregation: 'count',
         higherIsBetter: true
+    },
+    {
+        id: 'tokens_sent',
+        name: 'Tokens Sent',
+        description: 'Total tokens sent to LLM in prompts',
+        category: 'efficiency',
+        unit: 'tokens',
+        aggregation: 'sum',
+        higherIsBetter: false
+    },
+    {
+        id: 'tokens_received',
+        name: 'Tokens Received',
+        description: 'Total tokens received from LLM responses',
+        category: 'efficiency',
+        unit: 'tokens',
+        aggregation: 'sum',
+        higherIsBetter: false
     }
 ];
 
