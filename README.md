@@ -20,14 +20,13 @@
 ## Getting Started
 
 1.  **Install Ollama**: Ensure [Ollama](https://ollama.com) is installed and running.
-2.  **Pull a Model**: Run `ollama pull qwen2.5-coder` (or your preferred model).
-3.  **Select Model**: Use the command `Vibey: Select Model` to choose your LLM.
+2.  **Pull a Model**: Run `ollama pull qwen3-coder` (or your preferred model).
+3.  **Select Model**: Use the command `Vibey: Select Model` to choose your LLM. Or click the cog icon in the top of the Vibey Chat pane.
 4.  **Start Chatting**: Open the Vibey sidebar and ask away!
 
 ## Configuration
 
 - `vibey.autoRunTools`: Allow trusted tools to run without approval (default: false).
-- `vibey.maxTurns`: Set the maximum autonomy limit (default: 64).
 - `vibey.mcpServers`: Configure external tools via MCP.
 
 ## License
