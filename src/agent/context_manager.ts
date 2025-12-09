@@ -25,6 +25,8 @@ export class ContextManager {
     private masterContext: Map<string, string> = new Map(); // Master context storage
     private contextWindowTokens: number = 256 * 1024; // 256k token window
     private checkpoints: Checkpoint[] = [];
+    private contextCache: Map<string, { content: string; timestamp: number }> = new Map();
+    private cacheTimeout: number = 5 * 60 * 1000; // 5 minutes cache timeout
     
     async resolveContext(items: ContextItem[]): Promise<string> {
         if (!items || items.length === 0) return '';
@@ -49,13 +51,13 @@ export class ContextManager {
                 const lines = content.split('\n');
                 if (lines.length > maxLines) {
                     const truncatedContent = lines.slice(0, maxLines).join('\n') + '\n... (content truncated)';
-                    contextBlock += `<file path="${item.path}" truncated="true">\n${truncatedContent}\n</file>\n`;
+                    contextBlock += `<file path=\"${item.path}\" truncated=\"true\">\n${truncatedContent}\n</file>\n`;
                 } else {
-                    contextBlock += `<file path="${item.path}">\n${content}\n</file>\n`;
+                    contextBlock += `<file path=\"${item.path}\">\n${content}\n</file>\n`;
                 }
             } catch (e) {
                 console.error(`Failed to read context file ${item.path}`, e);
-                contextBlock += `<file path="${item.path}" error="true">Could not read file.</file>\n`;
+                contextBlock += `<file path=\"${item.path}\" error=\"true\">Could not read file.</file>\n`;
             }
         }
 
@@ -112,16 +114,31 @@ export class ContextManager {
     // Add content to the master context
     addToMasterContext(key: string, content: string): void {
         this.masterContext.set(key, content);
+        // Also add to cache
+        this.contextCache.set(key, { content, timestamp: Date.now() });
     }
     
     // Get content from master context
     getFromMasterContext(key: string): string | undefined {
-        return this.masterContext.get(key);
+        // Check cache first
+        const cached = this.contextCache.get(key);
+        if (cached && Date.now() - cached.timestamp < this.cacheTimeout) {
+            return cached.content;
+        }
+        
+        // If not in cache or expired, get from master context
+        const content = this.masterContext.get(key);
+        if (content) {
+            // Update cache
+            this.contextCache.set(key, { content, timestamp: Date.now() });
+        }
+        return content;
     }
     
     // Remove content from master context
     removeFromMasterContext(key: string): void {
         this.masterContext.delete(key);
+        this.contextCache.delete(key);
     }
     
     // Get all master context items
@@ -132,6 +149,7 @@ export class ContextManager {
     // Clear master context
     clearMasterContext(): void {
         this.masterContext.clear();
+        this.contextCache.clear();
     }
     
     // Generate sliding window context from master context
@@ -163,12 +181,12 @@ export class ContextManager {
                     const approxChars = remainingTokens * 4;
                     content = content.slice(0, approxChars) + '\n... (content truncated)';
                     tokens = this.estimateTokenCount(content);
-                    context += `\n<master_context key="${key}" truncated="true">\n${content}\n</master_context>\n`;
+                    context += `\n<master_context key=\"${key}\" truncated=\"true\">\n${content}\n</master_context>\n`;
                     totalTokens += tokens;
                 }
                 break; // Window full
             } else {
-                context += `\n<master_context key="${key}">\n${content}\n</master_context>\n`;
+                context += `\n<master_context key=\"${key}\">\n${content}\n</master_context>\n`;
                 totalTokens += tokens;
             }
         }
@@ -237,6 +255,7 @@ export class ContextManager {
                 for (const key of this.masterContext.keys()) {
                     if (key.includes(item)) {
                         this.masterContext.delete(key);
+                        this.contextCache.delete(key);
                     }
                 }
             }
@@ -248,6 +267,7 @@ export class ContextManager {
         // For now, we'll clear all context items
         // In a more advanced implementation, we could be more selective
         this.masterContext.clear();
+        this.contextCache.clear();
         this.checkpoints = [];
     }
     
@@ -273,5 +293,48 @@ export class ContextManager {
         for (const key of this.masterContext.keys()) {
             console.log(`  - ${key}`);
         }
+    }
+    
+    // NEW: Enhanced context management for iterative problem-solving
+    
+    // Method to add specific context items to be referenced later
+    addContextItem(key: string, content: string): void {
+        this.addToMasterContext(key, content);
+    }
+    
+    // Method to get context item by key
+    getContextItem(key: string): string | undefined {
+        return this.getFromMasterContext(key);
+    }
+    
+    // Method to check if a context item exists
+    hasContextItem(key: string): boolean {
+        return this.masterContext.has(key);
+    }
+    
+    // Method to get all context items with their keys
+    getAllContextItems(): { [key: string]: string } {
+        const result: { [key: string]: string } = {};
+        for (const [key, value] of this.masterContext.entries()) {
+            result[key] = value;
+        }
+        return result;
+    }
+    
+    // Method to clear specific context items
+    clearContextItems(keys: string[]): void {
+        for (const key of keys) {
+            this.removeFromMasterContext(key);
+        }
+    }
+    
+    // Method to invalidate cache for a specific item
+    invalidateCache(key: string): void {
+        this.contextCache.delete(key);
+    }
+    
+    // Method to get cache status
+    getCacheStatus(): string {
+        return `Cache size: ${this.contextCache.size} items\nMaster context size: ${this.masterContext.size} items\nCheckpoints: ${this.checkpoints.length}`;
     }
 }

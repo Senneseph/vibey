@@ -24,6 +24,7 @@ export interface TaskStep {
     updatedAt?: number;
     startedAt?: number;
     completedAt?: number;
+    contextRequired?: string; // New property to track required context for a step
 }
 
 export interface Task {

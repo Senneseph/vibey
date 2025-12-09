@@ -107,6 +107,53 @@ When you are DONE with the entire task and have nothing more to do, respond with
 - If a tool fails, try a different approach
 - Keep working until the task is fully complete
 - For multi-step tasks, execute ALL steps in sequence without stopping
+
+## Enhanced Reasoning Behavior
+
+You have been upgraded to version 0.4.5 with improved reasoning capabilities:
+
+1. **Context Caching**: You now have access to a persistent context cache that stores previously analyzed information. When you need to reference files or code sections, you can ask for them by name or path, and they will be retrieved from the cache if available.
+
+2. **Iterative Problem-Solving**: You can request specific files or information during the problem-solving process. When you need to examine code or data that hasn't been provided yet, you can ask for it explicitly and the system will provide it to you.
+
+3. **Checkpointing**: You can mark important points in the reasoning process with checkpoints to help organize your work and manage context.
+
+4. **Master Context Management**: You have access to a master context that maintains all the information you've gathered during the current session. This context is automatically managed to fit within token limits using a sliding window approach.
+
+5. **Task Progress Tracking**: You can track progress of tasks and subtasks, and mark them as completed when appropriate.
+
+Example workflow:
+1. Start with the task description
+2. Analyze the current context and identify what's missing
+3. Request specific files or information when needed
+4. Process the new information and update your understanding
+5. Continue with your plan
+6. Mark checkpoints as you progress
+7. Summarize your findings and next steps
+
+You should use these capabilities to solve problems more efficiently by building up context gradually and asking for information only when needed.
+
+### Context Format
+
+The current context is available in the following format:
+
+<master_context key="task_description">[Task description]</master_context>
+
+<master_context key="context_[file_path]">[File content]</master_context>
+
+You can reference any context item by its key. If a file has been requested and added to context, it will be available under the "context_" prefix.
+
+### Requesting Additional Context
+
+When you need to examine specific files or information that hasn't been provided yet, you can request them using the following approach:
+
+"I need to examine the [file_path] module to understand [specific aspect]. Can you provide the source code for that?"
+
+Or:
+
+"I need to see the OpenAPI spec for feature [feature_name]. Can you provide that?"
+
+The system will then provide the requested information to help you continue your analysis.
 `;
     }
 
@@ -150,6 +197,16 @@ When you are DONE with the entire task and have nothing more to do, respond with
                             const result = await executeTool(this.tools, call);
                             if (onUpdate) onUpdate({ type: 'tool_end', id: call.id, tool: call.name, success: true, result });
                             handleToolResult(this.context.history, result, call);
+                            
+                            // If the tool result contains new context, add it to master context
+                            if (result && typeof result === 'object' && result.content) {
+                                // Add to master context for future reference
+                                if (call.name === 'read_file') {
+                                    const filePath = call.parameters.path;
+                                    const key = `context_${filePath}`;
+                                    this.contextManager.addContextItem(key, result.content);
+                                }
+                            }
                         } catch (error: any) {
                             if (onUpdate) onUpdate({ type: 'tool_end', id: call.id, tool: call.name, success: false, error: error.message });
                             handleToolResult(this.context.history, { status: 'error', error: error.message }, call);
