@@ -169,6 +169,10 @@ class ChatPanel {
                     vscode.commands.executeCommand('vibey.openSettings');
                     break;
                 }
+                case 'selectModel': {
+                    vscode.commands.executeCommand('vibey.selectModel');
+                    break;
+                }
                 case 'selectContext': {
                     const uris = await vscode.window.showOpenDialog({
                         canSelectMany: true,
