@@ -212,9 +212,77 @@ export class TaskManager {
         
         return true;
     }
+
+    // NEW: Checkpoint functionality
+    
+    // Create a checkpoint for a task with summary of completed work
+    createCheckpoint(taskId: string, summary: string, completedSteps?: number[]): boolean {
+        const task = this.tasks.get(taskId);
+        if (!task) return false;
+        
+        // Add checkpoint information to task metadata
+        if (!task.checkpoints) {
+            task.checkpoints = [];
+        }
+        
+        const checkpoint = {
+            id: crypto.randomUUID(),
+            timestamp: Date.now(),
+            summary: summary,
+            completedSteps: completedSteps || [],
+            stepsCount: task.steps.length
+        };
+        
+        task.checkpoints.push(checkpoint);
+        task.updatedAt = Date.now();
+        this.tasks.set(taskId, task);
+        
+        return true;
+    }
+    
+    // Get task checkpoints
+    getTaskCheckpoints(taskId: string): any[] {
+        const task = this.tasks.get(taskId);
+        if (!task || !task.checkpoints) return [];
+        
+        return task.checkpoints;
+    }
+    
+    // Get recent checkpoints for task summary
+    getTaskSummary(taskId: string): string {
+        const task = this.tasks.get(taskId);
+        if (!task) return 'Task not found';
+        
+        let summary = `Task: ${task.title}\nStatus: ${task.status}\nProgress: ${task.progress?.percentage || 0}%\n\n`;
+        
+        if (task.checkpoints && task.checkpoints.length > 0) {
+            summary += 'Checkpoints:\n';
+            task.checkpoints.forEach((checkpoint, index) => {
+                summary += `  ${index + 1}. ${new Date(checkpoint.timestamp).toLocaleString()}: ${checkpoint.summary}\n`;
+            });
+        } else {
+            summary += 'No checkpoints recorded yet.\n';
+        }
+        
+        return summary;
+    }
     
     // For serialization if we add persistence later
     toJSON() {
         return Array.from(this.tasks.values());
+    }
+    
+    // Helper method to get a summary of completed work for context management
+    getCompletedWorkSummary(taskId: string): string {
+        const task = this.tasks.get(taskId);
+        if (!task) return 'Task not found';
+        
+        const completedSteps = task.steps
+            .filter(step => step.status === 'completed')
+            .map(step => step.description);
+        
+        if (completedSteps.length === 0) return 'No work completed yet.';
+        
+        return `Completed steps: ${completedSteps.join('; ')}`;
     }
 }
