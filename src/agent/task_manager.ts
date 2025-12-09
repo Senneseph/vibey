@@ -147,6 +147,72 @@ export class TaskManager {
         return Array.from(this.tasks.values()).sort((a, b) => b.createdAt - a.createdAt);
     }
 
+    // NEW: Enhanced task management for iterative problem-solving
+    
+    // Create a task with checkpoints for iterative problem-solving
+    createIterativeTask(title: string, steps: string[], initialContextItems?: string[]): Task {
+        const task = this.createTask(title, steps);
+        task.contextItems = initialContextItems || [];
+        task.status = 'in-progress';
+        
+        // Add a checkpoint step to track progress
+        task.steps.push({
+            id: crypto.randomUUID(),
+            description: 'Checkpoint - Review progress and plan next steps',
+            status: 'pending',
+            createdAt: Date.now()
+        });
+        
+        return task;
+    }
+    
+    // Mark a specific step as requiring additional context
+    requireContext(taskId: string, stepIndex: number, contextDescription: string): boolean {
+        const task = this.tasks.get(taskId);
+        if (!task || task.steps[stepIndex] === undefined) return false;
+        
+        // Add context requirement to the step
+        if (!task.steps[stepIndex].contextRequired) {
+            task.steps[stepIndex].contextRequired = contextDescription;
+        }
+        
+        task.updatedAt = Date.now();
+        this.tasks.set(taskId, task);
+        return true;
+    }
+    
+    // Method to get all context items required by a task
+    getRequiredContext(taskId: string): string[] {
+        const task = this.tasks.get(taskId);
+        if (!task) return [];
+        
+        const requiredContext: string[] = [];
+        
+        for (const step of task.steps) {
+            if (step.contextRequired) {
+                requiredContext.push(step.contextRequired);
+            }
+        }
+        
+        return requiredContext;
+    }
+    
+    // Method to add context items to a task
+    addContextToTask(taskId: string, contextItems: string[]): boolean {
+        const task = this.tasks.get(taskId);
+        if (!task) return false;
+        
+        if (!task.contextItems) {
+            task.contextItems = [];
+        }
+        
+        task.contextItems = [...task.contextItems, ...contextItems];
+        task.updatedAt = Date.now();
+        this.tasks.set(taskId, task);
+        
+        return true;
+    }
+    
     // For serialization if we add persistence later
     toJSON() {
         return Array.from(this.tasks.values());
