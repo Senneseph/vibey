@@ -1,6 +1,40 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AgentOrchestrator = void 0;
+const vscode = __importStar(require("vscode"));
 const context_manager_1 = require("./context_manager");
 const context_utils_1 = require("./context_utils");
 const llm_utils_1 = require("./llm_utils");
@@ -31,6 +65,20 @@ class AgentOrchestrator {
         };
     }
     getSystemPrompt() {
+        // Get configuration settings
+        const config = vscode.workspace.getConfiguration('vibey');
+        const rules = config.get('rules', {});
+        const userGuidelines = config.get('userGuidelines', '');
+        // Format rules for inclusion in system prompt
+        let rulesContent = '';
+        if (Object.keys(rules).length > 0) {
+            rulesContent = `## Rules\n\n${JSON.stringify(rules, null, 2)}\n\n`;
+        }
+        // Format user guidelines for inclusion in system prompt
+        let guidelinesContent = '';
+        if (userGuidelines) {
+            guidelinesContent = `## User Guidelines\n\n${userGuidelines}\n\n`;
+        }
         const toolDefs = this.tools.getToolDefinitions().map((t) => {
             return `## ${t.name}\n${t.description}\nParameters: ${JSON.stringify(t.parameters)}`;
         }).join('\n\n');
@@ -50,7 +98,7 @@ NEVER respond with "Would you like me to..." or "Should I...?" - just DO IT.
 NEVER stop after gathering information - immediately proceed to implementation.
 NEVER ask for confirmation before making changes - the user asked you to do something, so do it.
 
-## Available Tools
+${rulesContent}${guidelinesContent}## Available Tools
 
 ${toolDefs}
 
