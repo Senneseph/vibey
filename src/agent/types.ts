@@ -43,6 +43,15 @@ export interface Task {
         totalSteps: number;
         percentage: number;
     };
+    
+    // Checkpoint tracking
+    checkpoints?: {
+        id: string;
+        timestamp: number;
+        summary: string;
+        completedSteps: number[];
+        stepsCount: number;
+    }[];
 }
 
 
