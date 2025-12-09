@@ -93,7 +93,10 @@ function activate(context) {
     const orchestrator = new orchestrator_1.AgentOrchestrator(llm, gateway, workspaceRoot);
     const historyManager = new history_manager_1.HistoryManager(context, workspaceRoot);
     // Export metrics collector for use in LLM provider
-    vscode.extensions.getExtension('vibey.vibey')?.exports.metricsCollector = metricsCollector;
+    const vibeyExtension = vscode.extensions.getExtension('vibey.vibey');
+    if (vibeyExtension && vibeyExtension.exports) {
+        vibeyExtension.exports.metricsCollector = metricsCollector;
+    }
     // 2. Register Webview Provider
     const chatProvider = new ChatPanel_1.ChatPanel(context.extensionUri, orchestrator, taskManager, historyManager);
     // Register for Primary Sidebar
