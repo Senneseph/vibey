@@ -3,7 +3,7 @@
     "displayName": "Vibey",
     "description": "Offline-first AI Coding Agent",
     "publisher": "vibey-project",
-    "version": "0.5.0",
+    "version": "0.5.1",
     "icon": "icon.png",
     "repository": {
         "type": "git",
@@ -70,6 +70,17 @@
                     "type": "string",
                     "default": "",
                     "description": "Natural language instructions to shape LLM interactions"
+                },
+                "vibey.maxContextTokens": {
+                    "type": "number",
+                    "default": 32768,
+                    "enum": [8192, 16384, 32768, 65536, 131072, 262144],
+                    "description": "Maximum context window size in tokens. Smaller = faster but less context (8k=limited, 32k=balanced, 256k=full). Adjust based on your system memory."
+                },
+                "vibey.ollamaRequestTimeout": {
+                    "type": "number",
+                    "default": 300000,
+                    "description": "How long to wait for Ollama response in milliseconds (300000 = 5 min default, 600000 = 10 min for larger models)"
                 }
             }
         },

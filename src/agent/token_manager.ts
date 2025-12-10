@@ -1,0 +1,209 @@
+import * as vscode from 'vscode';
+
+export interface TokenLimits {
+    warningThreshold: number;  // When to start being careful (80% of max)
+    maxTokens: number;         // Hard limit for this context window
+    requestTimeout: number;    // How long to wait for Ollama response (ms)
+}
+
+export interface TokenUsage {
+    systemPrompt: number;
+    context: number;
+    userMessage: number;
+    toolResults: number;
+    total: number;
+}
+
+export class TokenManager {
+    private limits: TokenLimits;
+
+    constructor() {
+        this.limits = this.loadLimits();
+        console.log(`[VIBEY][TokenManager] Initialized with limits:`, this.limits);
+    }
+
+    private loadLimits(): TokenLimits {
+        const config = vscode.workspace.getConfiguration('vibey');
+        const maxTokens = config.get<number>('maxContextTokens') || 32768;
+        const requestTimeout = config.get<number>('ollamaRequestTimeout') || 300000; // 5 minutes default
+        
+        return {
+            maxTokens,
+            warningThreshold: Math.floor(maxTokens * 0.8),
+            requestTimeout
+        };
+    }
+
+    /**
+     * Estimate tokens from text (rough approximation: 1 token ≈ 4 characters)
+     */
+    estimateTokens(text: string): number {
+        return Math.ceil(text.length / 4);
+    }
+
+    /**
+     * Calculate token usage breakdown
+     */
+    calculateUsage(systemPrompt: string, context: string, userMessage: string, toolResults: string = ''): TokenUsage {
+        return {
+            systemPrompt: this.estimateTokens(systemPrompt),
+            context: this.estimateTokens(context),
+            userMessage: this.estimateTokens(userMessage),
+            toolResults: this.estimateTokens(toolResults),
+            total: this.estimateTokens(systemPrompt + context + userMessage + toolResults)
+        };
+    }
+
+    /**
+     * Check if we're approaching the token limit
+     */
+    isApproachingLimit(currentTokens: number): boolean {
+        return currentTokens > this.limits.warningThreshold;
+    }
+
+    /**
+     * Check if we've exceeded the token limit
+     */
+    isExceeded(currentTokens: number): boolean {
+        return currentTokens > this.limits.maxTokens;
+    }
+
+    /**
+     * Get how many tokens we have left
+     */
+    getRemainingTokens(currentTokens: number): number {
+        return Math.max(0, this.limits.maxTokens - currentTokens);
+    }
+
+    /**
+     * Get percentage of limit used
+     */
+    getUsagePercentage(currentTokens: number): number {
+        return Math.round((currentTokens / this.limits.maxTokens) * 100);
+    }
+
+    /**
+     * Calculate safe context size for a message
+     * Reserve tokens for system prompt, user message, and response
+     */
+    calculateMaxContextSize(systemPromptTokens: number, userMessageTokens: number, responseReserve: number = 2000): number {
+        const reservedForResponse = responseReserve;
+        const available = this.limits.maxTokens - systemPromptTokens - userMessageTokens - reservedForResponse;
+        return Math.max(0, available * 4); // Convert back to approximate characters
+    }
+
+    /**
+     * Truncate context to fit within limits, keeping most recent items
+     */
+    truncateContext(fullContext: string, systemPromptTokens: number, userMessageTokens: number, maxContextTokens?: number): {
+        truncated: string;
+        wasExceeded: boolean;
+        removedTokens: number;
+    } {
+        const maxContext = maxContextTokens || this.calculateMaxContextSize(systemPromptTokens, userMessageTokens);
+        const currentContextTokens = this.estimateTokens(fullContext);
+        
+        if (currentContextTokens <= maxContext) {
+            return { truncated: fullContext, wasExceeded: false, removedTokens: 0 };
+        }
+
+        // Try to remove oldest/least important context while keeping structure
+        const lines = fullContext.split('\n');
+        let truncated = fullContext;
+        let removedTokens = currentContextTokens;
+
+        // Remove non-critical sections (context items) first
+        const sectionRegex = /^#+\s+/m;
+        const sections = fullContext.split(sectionRegex).slice(1); // Skip first empty element
+
+        if (sections.length > 1) {
+            // Remove from the beginning (oldest context)
+            truncated = sections.slice(1).join('\n---\n');
+            removedTokens = currentContextTokens - this.estimateTokens(truncated);
+
+            if (this.estimateTokens(truncated) <= maxContext) {
+                return { 
+                    truncated, 
+                    wasExceeded: true, 
+                    removedTokens 
+                };
+            }
+        }
+
+        // If still too large, truncate middle sections
+        const maxChars = maxContext * 4;
+        if (fullContext.length > maxChars) {
+            truncated = fullContext.substring(0, maxChars);
+            // Try to cut at a line break
+            const lastNewline = truncated.lastIndexOf('\n');
+            if (lastNewline > 0) {
+                truncated = truncated.substring(0, lastNewline) + '\n... (context truncated)';
+            }
+        }
+
+        return {
+            truncated,
+            wasExceeded: true,
+            removedTokens: currentContextTokens - this.estimateTokens(truncated)
+        };
+    }
+
+    /**
+     * Create a summary of what was removed for the next turn
+     */
+    createContinuationSummary(removedContext: string, taskSoFar: string): string {
+        const summary = `## Continuation from Previous Turn
+
+The following context was temporarily removed due to token limits but is available if needed:
+- Removed ${this.estimateTokens(removedContext)} tokens of previous context
+- Continue based on task progress: ${taskSoFar}
+
+To continue: refer to previous findings but focus on next steps.`;
+        
+        return summary;
+    }
+
+    /**
+     * Get current configuration
+     */
+    getConfig(): TokenLimits {
+        return this.limits;
+    }
+
+    /**
+     * Reload configuration (in case settings changed)
+     */
+    reloadConfig(): void {
+        this.limits = this.loadLimits();
+        console.log(`[VIBEY][TokenManager] Configuration reloaded:`, this.limits);
+    }
+
+    /**
+     * Format a human-readable token budget report
+     */
+    formatTokenReport(usage: TokenUsage, context?: string): string {
+        const report = `Token Budget Report:
+- System Prompt: ${usage.systemPrompt} tokens
+- Context: ${usage.context} tokens
+- User Message: ${usage.userMessage} tokens
+- Tool Results: ${usage.toolResults} tokens
+- Total Used: ${usage.total} tokens
+- Max Available: ${this.limits.maxTokens} tokens
+- Usage: ${this.getUsagePercentage(usage.total)}%
+- Remaining: ${this.getRemainingTokens(usage.total)} tokens`;
+
+        if (context) {
+            return report + `\n- Status: ${this.isExceeded(usage.total) ? '❌ EXCEEDED' : this.isApproachingLimit(usage.total) ? '⚠️ WARNING' : '✅ OK'}`;
+        }
+
+        return report;
+    }
+}
+
+export function getTokenManager(): TokenManager {
+    // Singleton instance
+    if (!(global as any).vibeyTokenManager) {
+        (global as any).vibeyTokenManager = new TokenManager();
+    }
+    return (global as any).vibeyTokenManager;
+}

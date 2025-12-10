@@ -42,6 +42,7 @@ const tool_utils_1 = require("./tool_utils");
 const history_utils_1 = require("./history_utils");
 const error_utils_1 = require("./error_utils");
 const extension_1 = require("../extension");
+const token_manager_1 = require("./token_manager");
 class AgentOrchestrator {
     cancel() {
         if (this.abortController) {
@@ -57,6 +58,7 @@ class AgentOrchestrator {
          */
         this.abortController = null;
         this.contextManager = new context_manager_1.ContextManager();
+        this.tokenManager = (0, token_manager_1.getTokenManager)();
         this.context = {
             workspaceRoot,
             history: [
@@ -144,15 +146,53 @@ When done, respond with plain text summarizing what you accomplished.
             const contextBlockTime = Date.now() - contextBlockStart;
             console.log(`[VIBEY][Orchestrator] Context resolution took ${contextBlockTime}ms`);
             console.log(`[VIBEY][Orchestrator] Context block size: ${contextBlock.length} characters (~${Math.ceil(contextBlock.length / 4)} tokens)`);
+            // Calculate token usage BEFORE adding to history
+            const systemPromptTokens = this.tokenManager.estimateTokens(this.context.history[0].content);
+            const userMessageTokens = this.tokenManager.estimateTokens(userMessage);
+            const contextTokens = this.tokenManager.estimateTokens(contextBlock);
+            const tokenUsage = {
+                systemPrompt: systemPromptTokens,
+                context: contextTokens,
+                userMessage: userMessageTokens,
+                toolResults: 0,
+                total: systemPromptTokens + contextTokens + userMessageTokens
+            };
+            console.log(`[VIBEY][Orchestrator] Token usage:`, tokenUsage);
+            console.log(`[VIBEY][Orchestrator] ${this.tokenManager.formatTokenReport(tokenUsage)}`);
+            // Check if we're exceeding token limits
+            if (this.tokenManager.isExceeded(tokenUsage.total)) {
+                console.warn(`[VIBEY][Orchestrator] ⚠️ WARNING: Total tokens (${tokenUsage.total}) exceeds limit (${this.tokenManager.getConfig().maxTokens})`);
+                // Truncate context to fit within limits
+                const truncated = this.tokenManager.truncateContext(contextBlock, systemPromptTokens, userMessageTokens);
+                if (truncated.wasExceeded) {
+                    console.warn(`[VIBEY][Orchestrator] Context truncated - removed ${truncated.removedTokens} tokens`);
+                    if (onUpdate) {
+                        onUpdate({
+                            type: 'warning',
+                            message: `Context was too large (${tokenUsage.context} tokens). Truncated to fit within ${this.tokenManager.getConfig().maxTokens} token limit.`
+                        });
+                    }
+                }
+            }
+            else if (this.tokenManager.isApproachingLimit(tokenUsage.total)) {
+                console.warn(`[VIBEY][Orchestrator] ⚠️ Approaching token limit: ${tokenUsage.total}/${this.tokenManager.getConfig().maxTokens} tokens`);
+                if (onUpdate) {
+                    onUpdate({
+                        type: 'warning',
+                        message: `Approaching token limit (${this.tokenManager.getUsagePercentage(tokenUsage.total)}% used). Consider breaking into multiple turns.`
+                    });
+                }
+            }
+            else {
+                console.log(`[VIBEY][Orchestrator] ✅ Token usage is healthy (${this.tokenManager.getUsagePercentage(tokenUsage.total)}% of limit)`);
+            }
             // Report context summary to UI
             if (contextItems && contextItems.length > 0 && onUpdate) {
-                const contextSize = contextBlock.length;
-                const contextTokens = Math.ceil(contextSize / 4); // Rough estimate: 4 chars per token
                 onUpdate({
                     type: 'contextAdded',
                     files: contextItems.map(c => ({ name: c.name, path: c.path })),
                     tokenEstimate: contextTokens,
-                    characterCount: contextSize
+                    characterCount: contextBlock.length
                 });
             }
             const fullMessage = userMessage + contextBlock;
