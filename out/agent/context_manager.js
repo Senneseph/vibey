@@ -48,6 +48,8 @@ class ContextManager {
     async resolveContext(items) {
         if (!items || items.length === 0)
             return '';
+        const startTime = Date.now();
+        console.log(`[VIBEY][ContextManager] Resolving ${items.length} context items`);
         let contextBlock = '\n\n<context>\n';
         // First, try to build a project structure if we have a workspace root
         if (items.length > 0 && items[0].path) {
@@ -57,9 +59,12 @@ class ContextManager {
         }
         for (const item of items) {
             try {
+                const itemStartTime = Date.now();
                 // Determine if file is text or binary (basic check)
                 // For MVP, assume everything is text/code.
                 const content = await fs.readFile(item.path, 'utf-8');
+                const itemTime = Date.now() - itemStartTime;
+                console.log(`[VIBEY][ContextManager] Read file ${item.name} (${content.length} chars, ${itemTime}ms)`);
                 // If content is too long, truncate it to manageable size
                 const maxLines = 256;
                 const lines = content.split('\n');

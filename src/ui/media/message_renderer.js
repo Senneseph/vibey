@@ -204,6 +204,39 @@ function handleAgentUpdate(update) {
             // Display token usage information
             div.innerHTML = `<strong>📊 Token Usage:</strong> ${update.sent} sent, ${update.received} received`;
             break;
+        case 'llmRequest':
+            // Display LLM request details
+            const payload = update.payload || {};
+            const msgCount = payload.messages?.length || payload.messageCount || 0;
+            const payloadSize = JSON.stringify(payload.messages || []).length;
+            const estTokens = update.estimatedTokens || Math.ceil(payloadSize / 4);
+            div.innerHTML = `<details><summary>🔌 LLM Request Sent (${estTokens} tokens, ${update.duration}ms)</summary>
+                <div style="font-size: 0.9em; font-family: monospace;">
+                    <strong>Model:</strong> ${payload.model || 'unknown'}<br>
+                    <strong>Messages:</strong> ${msgCount}<br>
+                    <strong>Payload size:</strong> ${payloadSize} bytes<br>
+                    <strong>Estimated tokens:</strong> ~${estTokens}<br>
+                    <strong>Duration:</strong> ${update.duration}ms
+                </div>
+            </details>`;
+            break;
+        case 'llmError':
+            // Display detailed LLM error with source
+            div.innerHTML = `<details open><summary>❌ LLM Error (${update.duration}ms)</summary>
+                <div style="font-size: 0.9em; font-family: monospace; color: #d32f2f;">
+                    <strong>Error:</strong> ${update.error || 'Unknown error'}<br>
+                    <strong>Source:</strong> ${update.source || 'Unknown'}<br>
+                    <strong>Duration:</strong> ${update.duration}ms<br>
+                    <p><strong>Troubleshooting:</strong></p>
+                    <ul>
+                        <li>Check Ollama is running: <code>ollama serve</code></li>
+                        <li>Verify connection URL in Vibey settings</li>
+                        <li>Check browser console for network errors</li>
+                        <li>Look at Extension Host output for details</li>
+                    </ul>
+                </div>
+            </details>`;
+            break;
     }
     getChatContainer().appendChild(div);
     getChatContainer().scrollTop = getChatContainer().scrollHeight;

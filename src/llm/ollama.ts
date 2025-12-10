@@ -32,6 +32,7 @@ export class OllamaClient implements LLMProvider {
 
     async chat(messages: ChatMessage[], signal?: AbortSignal): Promise<string> {
         const { modelName, baseUrl } = this.getConfig();
+        const startTime = Date.now();
 
         const payload = {
             model: modelName,
@@ -48,7 +49,16 @@ export class OllamaClient implements LLMProvider {
             stream: false
         };
 
+        // Log request details
+        const totalTokens = JSON.stringify(payload).length / 4;
+        console.log(`[VIBEY][Ollama] Sending request to ${baseUrl}/api/chat`);
+        console.log(`[VIBEY][Ollama] Model: ${modelName}`);
+        console.log(`[VIBEY][Ollama] Messages: ${payload.messages.length}`);
+        console.log(`[VIBEY][Ollama] Estimated payload tokens: ~${Math.ceil(totalTokens)}`);
+        console.log(`[VIBEY][Ollama] Payload size: ${JSON.stringify(payload).length} bytes`);
+
         try {
+            console.log(`[VIBEY][Ollama] Initiating fetch request...`);
             const response = await fetch(`${baseUrl}/api/chat`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -56,11 +66,18 @@ export class OllamaClient implements LLMProvider {
                 signal // Pass signal to fetch
             });
 
+            const elapsed = Date.now() - startTime;
+            console.log(`[VIBEY][Ollama] Fetch completed in ${elapsed}ms with status ${response.status}`);
+
             if (!response.ok) {
-                throw new Error(`Ollama API error: ${response.statusText}`);
+                throw new Error(`Ollama API error: ${response.statusText} (status ${response.status})`);
             }
 
             const data = await response.json() as OllamaResponse;
+
+            const totalElapsed = Date.now() - startTime;
+            console.log(`[VIBEY][Ollama] Response received. Total time: ${totalElapsed}ms`);
+            console.log(`[VIBEY][Ollama] Response tokens - prompt: ${data.prompt_eval_count}, generated: ${data.eval_count}`);
 
             // Track token usage
             const metricsCollector = getMetricsCollector();
@@ -74,10 +91,13 @@ export class OllamaClient implements LLMProvider {
             return data.message.content;
 
         } catch (error: any) {
+            const totalElapsed = Date.now() - startTime;
+            console.error(`[VIBEY][Ollama] Error after ${totalElapsed}ms:`, error.message);
+            
             if (error.name === 'AbortError') {
                 throw new Error('Request cancelled by user');
             }
-            console.error('Failed to call Ollama:', error);
+            console.error(`[VIBEY][Ollama] Full error:`, error);
             throw error;
         }
     }

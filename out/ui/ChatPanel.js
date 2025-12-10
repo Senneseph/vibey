@@ -155,8 +155,17 @@ class ChatPanel {
                         }
                     }
                     catch (e) {
+                        console.error('[VIBEY][ChatPanel] Error in chat:', e);
+                        const errorMsg = e.message || 'Unknown error';
                         if (this.webviewReady) {
-                            this._view?.webview.postMessage({ type: 'addMessage', role: 'assistant', content: `Error: ${e.message}` });
+                            // Send detailed error information to webview
+                            this._view?.webview.postMessage({
+                                type: 'llmError',
+                                error: errorMsg,
+                                source: e.stack ? e.stack.split('\n')[0] : 'Unknown',
+                                duration: Date.now() - (data.startTime || 0)
+                            });
+                            this._view?.webview.postMessage({ type: 'addMessage', role: 'assistant', content: `**Error:** ${errorMsg}` });
                         }
                         if (this.webviewReady) {
                             this._view?.webview.postMessage({ type: 'requestComplete' }); // Even on error we are done
