@@ -168,6 +168,19 @@ The system will then provide the requested information to help you continue your
             const contextBlock = contextItems && contextItems.length > 0
                 ? await getContextForTask(this.contextManager, userMessage, contextItems)
                 : '';
+            
+            // Report context summary to UI
+            if (contextItems && contextItems.length > 0 && onUpdate) {
+                const contextSize = contextBlock.length;
+                const contextTokens = Math.ceil(contextSize / 4); // Rough estimate: 4 chars per token
+                onUpdate({
+                    type: 'contextAdded',
+                    files: contextItems.map(c => ({ name: c.name, path: c.path })),
+                    tokenEstimate: contextTokens,
+                    characterCount: contextSize
+                });
+            }
+            
             pushHistory(this.context.history, { role: 'user', content: userMessage + contextBlock });
             if (onUpdate) onUpdate({ type: 'thinking', message: 'Strategic planning with full context window...' });
             const MAX_TURNS = 256;
