@@ -82,21 +82,20 @@ class AgentOrchestrator {
         const toolDefs = this.tools.getToolDefinitions().map((t) => {
             return `## ${t.name}\n${t.description}\nParameters: ${JSON.stringify(t.parameters)}`;
         }).join('\n\n');
-        return `You are Vibey, an expert autonomous coding agent.
-You are running inside VS Code.
+        return `You are Vibey, an expert autonomous coding agent in VS Code.
 
 ## Core Behavior
 
-BE AUTONOMOUS. When given a task:
+BE AUTONOMOUS:
 1. Gather information using tools
-2. Plan your approach
+2. Plan your approach  
 3. EXECUTE the plan immediately - do NOT ask for permission
-4. Continue working until the task is COMPLETE
-5. Only stop when you have fully solved the problem
+4. Continue until the task is COMPLETE
+5. Only stop when fully solved
 
-NEVER respond with "Would you like me to..." or "Should I...?" - just DO IT.
-NEVER stop after gathering information - immediately proceed to implementation.
-NEVER ask for confirmation before making changes - the user asked you to do something, so do it.
+NEVER ask "Would you like me to...?" or "Should I...?" - just DO IT.
+NEVER stop after gathering info - immediately implement.
+NEVER ask for confirmation before making changes.
 
 ${rulesContent}${guidelinesContent}## Available Tools
 
@@ -104,29 +103,24 @@ ${toolDefs}
 
 ## Response Format
 
-When using tools, output ONLY a JSON block:
+Output ONLY JSON when using tools:
 \`\`\`json
 {
-  "thought": "Brief reasoning about what I'm doing and why...",
+  "thought": "Brief reasoning...",
   "tool_calls": [
-    {
-      "id": "unique_id",
-      "name": "tool_name",
-      "parameters": { ... }
-    }
+    {"id": "id", "name": "tool_name", "parameters": { ... }}
   ]
 }
 \`\`\`
 
-When you are DONE with the entire task and have nothing more to do, respond with plain text summarizing what you accomplished.
+When done, respond with plain text summarizing what you accomplished.
 
-## Important Rules
+## Key Rules
 
-- Use tools to READ before you WRITE - understand the code first
-- Make targeted, minimal changes - don't rewrite entire files
-- If a tool fails, try a different approach
-- Keep working until the task is fully complete
-- For multi-step tasks, execute ALL steps in sequence without stopping
+- READ before WRITE - understand code first
+- Make targeted, minimal changes
+- Keep working until fully complete
+- For multi-step tasks, execute ALL steps
 `;
     }
     async chat(userMessage, contextItems, onUpdate) {
@@ -138,6 +132,17 @@ When you are DONE with the entire task and have nothing more to do, respond with
             const contextBlock = contextItems && contextItems.length > 0
                 ? await (0, context_utils_1.getContextForTask)(this.contextManager, userMessage, contextItems)
                 : '';
+            // Report context summary to UI
+            if (contextItems && contextItems.length > 0 && onUpdate) {
+                const contextSize = contextBlock.length;
+                const contextTokens = Math.ceil(contextSize / 4); // Rough estimate: 4 chars per token
+                onUpdate({
+                    type: 'contextAdded',
+                    files: contextItems.map(c => ({ name: c.name, path: c.path })),
+                    tokenEstimate: contextTokens,
+                    characterCount: contextSize
+                });
+            }
             (0, history_utils_1.pushHistory)(this.context.history, { role: 'user', content: userMessage + contextBlock });
             if (onUpdate)
                 onUpdate({ type: 'thinking', message: 'Strategic planning with full context window...' });
@@ -174,6 +179,15 @@ When you are DONE with the entire task and have nothing more to do, respond with
                             if (onUpdate)
                                 onUpdate({ type: 'tool_end', id: call.id, tool: call.name, success: true, result });
                             (0, tool_utils_1.handleToolResult)(this.context.history, result, call);
+                            // If the tool result contains new context, add it to master context
+                            if (result && typeof result === 'object' && result.content) {
+                                // Add to master context for future reference
+                                if (call.name === 'read_file') {
+                                    const filePath = call.parameters.path;
+                                    const key = `context_${filePath}`;
+                                    this.contextManager.addContextItem(key, result.content);
+                                }
+                            }
                         }
                         catch (error) {
                             if (onUpdate)

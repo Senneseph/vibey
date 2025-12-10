@@ -213,12 +213,9 @@ class ChatPanel {
                     // But "retryRequest" implies the client knows what to retry? 
                     // Or the client sends the text again.
                     // Let's assume the client sends the text again for "sendMessage".
-                    // If "resume", we might need to tell the Orchestrator to "continue".
+                    // If "resume", we might need to tell the Orchestrator to "continue". 
                     // BUT, "Retry" usually means "Do it again". 
                     // Let's implement 'stopRequest' here. 'retryRequest' isn't needed if we reuse 'sendMessage' from client.
-                    // Wait, the client button becomes "Resume". If clicked, it should probably just re-send the last input?
-                    // No, UI should handle that? 
-                    // Let's just handle stopRequest first.
                     break;
                 }
                 case 'getTasks': {
@@ -243,6 +240,15 @@ class ChatPanel {
                             });
                         }
                     });
+                    break;
+                }
+                case 'requestContext': {
+                    // Handle requests for additional context from the agent
+                    if (data.contextKey && this.webviewReady) {
+                        // This would be where we could request specific context from the agent
+                        // For now, we'll just show a notification
+                        vscode.window.showInformationMessage(`Agent requested context: ${data.contextKey}`);
+                    }
                     break;
                 }
             }

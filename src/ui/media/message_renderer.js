@@ -195,6 +195,11 @@ function handleAgentUpdate(update) {
         case 'thought':
             div.innerHTML = `<details open><summary>Thinking Plan</summary><pre>${update.message}</pre></details>`;
             break;
+        case 'contextAdded':
+            // Display context information
+            const fileList = update.files.map(f => `<li><code>${f.name}</code> (${f.path})</li>`).join('');
+            div.innerHTML = `<details><summary>📁 Context Added (~${update.tokenEstimate} tokens)</summary><ul>${fileList}</ul><small>${update.characterCount} characters</small></details>`;
+            break;
         case 'tokens':
             // Display token usage information
             div.innerHTML = `<strong>📊 Token Usage:</strong> ${update.sent} sent, ${update.received} received`;

@@ -5,16 +5,18 @@ const zod_1 = require("zod");
 const createManageTaskTool = (taskManager) => {
     return {
         name: 'manage_task',
-        description: 'Create, update, or list tasks to track complex goals. Use this to break down large user requests into steps. Supports atomic changes tracking.',
+        description: 'Create, update, or list tasks to track complex goals. Use this to break down large user requests into steps. Supports atomic changes tracking and checkpoint management.',
         parameters: zod_1.z.object({
-            action: zod_1.z.enum(['create', 'update_status', 'update_step', 'list', 'create_atomic_change', 'get_progress', 'start_step', 'complete_step']).describe('The action to perform'),
+            action: zod_1.z.enum(['create', 'update_status', 'update_step', 'list', 'create_atomic_change', 'get_progress', 'start_step', 'complete_step', 'create_checkpoint', 'get_summary']).describe('The action to perform'),
             title: zod_1.z.string().optional().describe('Title for new task'),
             description: zod_1.z.string().optional().describe('Description for atomic change task'),
             steps: zod_1.z.array(zod_1.z.string()).optional().describe('List of step descriptions for new task'),
             taskId: zod_1.z.string().optional().describe('ID of the task to update'),
             status: zod_1.z.enum(['pending', 'in-progress', 'completed', 'failed']).optional().describe('New status for task or step'),
             stepIndex: zod_1.z.number().optional().describe('Index of the step to update (0-based)'),
-            contextItems: zod_1.z.array(zod_1.z.string()).optional().describe('List of context items for atomic change task')
+            contextItems: zod_1.z.array(zod_1.z.string()).optional().describe('List of context items for atomic change task'),
+            summary: zod_1.z.string().optional().describe('Summary of work completed at checkpoint'),
+            completedSteps: zod_1.z.array(zod_1.z.number()).optional().describe('List of completed step indices to track in checkpoint')
         }),
         execute: async (args) => {
             if (args.action === 'create') {
@@ -72,6 +74,20 @@ const createManageTaskTool = (taskManager) => {
                 if (!success)
                     return `Failed to complete step ${args.stepIndex} for task ${args.taskId}`;
                 return `Step ${args.stepIndex} completed for task ${args.taskId}`;
+            }
+            if (args.action === 'create_checkpoint') {
+                if (!args.taskId || !args.summary)
+                    throw new Error('taskId and summary required for checkpoint');
+                const success = taskManager.createCheckpoint(args.taskId, args.summary, args.completedSteps);
+                if (!success)
+                    return `Failed to create checkpoint for task ${args.taskId}`;
+                return `Checkpoint created for task ${args.taskId}`;
+            }
+            if (args.action === 'get_summary') {
+                if (!args.taskId)
+                    throw new Error('taskId required');
+                const summary = taskManager.getTaskSummary(args.taskId);
+                return summary;
             }
             return 'Invalid action';
         }

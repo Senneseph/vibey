@@ -54,6 +54,8 @@ const editor_1 = require("./tools/definitions/editor");
 const history_manager_1 = require("./agent/history_manager");
 const mcp_service_1 = require("./agent/mcp/mcp_service");
 const metrics_collector_1 = require("./agent/metrics/metrics_collector");
+const search_1 = require("./tools/definitions/search");
+const context_manager_1 = require("./agent/context_manager");
 // Module-level references for cleanup
 let mcpService;
 let terminalManager;
@@ -85,6 +87,9 @@ function activate(context) {
     // Register editor awareness tools
     const editorTools = (0, editor_1.createEditorTools)();
     editorTools.forEach(t => gateway.registerTool(t));
+    // Register search tools
+    const searchTools = (0, search_1.createSearchTools)(new context_manager_1.ContextManager());
+    searchTools.forEach(t => gateway.registerTool(t));
     // Initialize MCP Service for external tool discovery
     mcpService = new mcp_service_1.McpService(gateway, context);
     mcpService.initialize().catch(err => {
