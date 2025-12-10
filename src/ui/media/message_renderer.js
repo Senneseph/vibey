@@ -42,7 +42,7 @@ function renderMessage(role, content, timestamp = null) {
         try {
             const parsed = JSON.parse(content);
             resultPretty = JSON.stringify(parsed, null, 2);
-        } catch (e) { }
+        } catch (e) {}
 
         div.innerHTML = `<details><summary>Tool Output</summary><pre>${resultPretty}</pre></details>`;
         getChatContainer().appendChild(div);
@@ -55,7 +55,10 @@ function renderMessage(role, content, timestamp = null) {
     
     const messageMeta = document.createElement('div');
     messageMeta.className = 'message-meta';
-    messageMeta.innerHTML = `\n        <span class="message-user">${role === 'user' ? 'You' : 'Vibey'}</span>\n        <span class="message-timestamp">${timestamp || getTimestamp()}</span>\n    `;
+    messageMeta.innerHTML = `
+        <span class="message-user">${role === 'user' ? 'You' : 'Vibey'}</span>
+        <span class="message-timestamp">${timestamp || getTimestamp()}</span>
+    `;
     
     const messageContent = document.createElement('div');
     messageContent.className = `message ${role}`;
@@ -68,7 +71,7 @@ function renderMessage(role, content, timestamp = null) {
             let jsonContent = null;
 
             // Try fenced code block first (handles Windows \r\n)
-            const fencedMatch = content.match(/`\`\`\`json[\r\n]+([\s\S]*?)[\r\n]+\`\`\`/);
+            const fencedMatch = content.match(/```json[\r\n]+([\s\S]*?)[\r\n]+```/);
             if (fencedMatch) {
                 jsonContent = fencedMatch[1].trim();
                 // Sometimes LLMs duplicate the "json" word inside the block
@@ -86,7 +89,7 @@ function renderMessage(role, content, timestamp = null) {
             if (jsonContent) {
                 parsed = JSON.parse(jsonContent);
             }
-        } catch (e) { }
+        } catch (e) {}
 
         if (parsed) {
             // Render Thought
@@ -102,7 +105,17 @@ function renderMessage(role, content, timestamp = null) {
                 parsed.tool_calls.forEach(call => {
                     const toolDiv = document.createElement('div');
                     toolDiv.className = 'message tool-call';
-                    toolDiv.innerHTML = `\n                        <div class="tool-header">\n                            <span class="tool-icon">🛠️</span>\n                            <span class="tool-name">${call.name}</span>\n                            <span class="tool-summary">${formatToolParams(call.name, call.parameters)}</span>\n                        </div>\n                        <details class="tool-details">\n                            <summary>Details</summary>\n                            <pre>${JSON.stringify(call.parameters, null, 2)}</pre>\n                        </details>\n                    `;
+                    toolDiv.innerHTML = `
+                        <div class="tool-header">
+                            <span class="tool-icon">🛠️</span>
+                            <span class="tool-name">${call.name}</span>
+                            <span class="tool-summary">${formatToolParams(call.name, call.parameters)}</span>
+                        </div>
+                        <details class="tool-details">
+                            <summary>Details</summary>
+                            <pre>${JSON.stringify(call.parameters, null, 2)}</pre>
+                        </details>
+                    `;
                     messageContent.appendChild(toolDiv);
                 });
             }
@@ -144,7 +157,17 @@ function handleAgentUpdate(update) {
         div.className = 'message tool-call running';
         div.id = `tool-${update.id}`; // Use ID for updates
 
-        div.innerHTML = `\n            <div class="tool-header">\n                <span class="tool-icon">⏳</span>\n                <span class="tool-name">${update.tool}</span>\n                <span class="tool-summary">${formatToolParams(update.tool, update.parameters)}</span>\n            </div>\n            <details class="tool-details">\n                <summary>Parameters</summary>\n                <pre>${JSON.stringify(update.parameters, null, 2)}</pre>\n            </details>\n        `;
+        div.innerHTML = `
+            <div class="tool-header">
+                <span class="tool-icon">⏳</span>
+                <span class="tool-name">${update.tool}</span>
+                <span class="tool-summary">${formatToolParams(update.tool, update.parameters)}</span>
+            </div>
+            <details class="tool-details">
+                <summary>Parameters</summary>
+                <pre>${JSON.stringify(update.parameters, null, 2)}</pre>
+            </details>
+        `;
         getChatContainer().appendChild(div);
         getChatContainer().scrollTop = getChatContainer().scrollHeight;
         return;
@@ -170,18 +193,7 @@ function handleAgentUpdate(update) {
                 resultDetails.innerHTML = `<summary>Result</summary><pre>${resultText}</pre>`;
                 div.appendChild(resultDetails);
             }
-        } else {
-            // Fallback if we missed the start event
-            const fallbackDiv = document.createElement('div');
-            fallbackDiv.className = 'message system-update';
-            fallbackDiv.innerHTML = `<em>${update.success ? '✅' : '❌'} Finished tool: ${update.tool}</em>`;
-            if (update.result) {
-                const resultText = typeof update.result === 'object' ? JSON.stringify(update.result, null, 2) : update.result;
-                fallbackDiv.innerHTML += `<details><summary>Result</summary><pre>${resultText}</pre></details>`;
-            }
-            getChatContainer().appendChild(fallbackDiv);
         }
-        getChatContainer().scrollTop = getChatContainer().scrollHeight;
         return;
     }
 
@@ -205,63 +217,71 @@ function handleAgentUpdate(update) {
             div.innerHTML = `<strong>📊 Token Usage:</strong> ${update.sent} sent, ${update.received} received`;
             break;
         case 'llmRequest':
-            // Display LLM request details with message preview
+            // Display LLM request details with message preview in LLM Stream tab
             const payload = update.payload || {};
             const msgCount = payload.messages?.length || payload.messageCount || 0;
             const payloadSize = JSON.stringify(payload.messages || []).length;
             const estTokens = update.estimatedTokens || Math.ceil(payloadSize / 4);
             
-            // Check if there's an existing llmRequest panel to update
-            const existingRequest = Array.from(getChatContainer().querySelectorAll('[data-message-type="llmRequest"]')).pop();
-            
-            // Create message previews for all messages
-            let messagePreviews = '';
-            if (payload.messages && Array.isArray(payload.messages)) {
-                const systemMsg = payload.messages.find(m => m.role === 'system');
-                const otherMsgs = payload.messages.filter(m => m.role !== 'system');
+            // Render to LLM Stream container instead of chat
+            const streamContainer = document.getElementById('llm-stream-container');
+            if (streamContainer) {
+                const div = document.createElement('div');
+                div.className = 'message system-update';
                 
-                if (systemMsg) {
-                    const content = typeof systemMsg.content === 'string' ? systemMsg.content : JSON.stringify(systemMsg.content);
-                    const preview = content.length > 150 ? content.substring(0, 150) + '...' : content;
-                    messagePreviews += `<div style="margin-bottom: 10px;"><strong>📋 System Prompt:</strong><br><div style="background: #f0f0f0; padding: 6px; margin-top: 4px; border-left: 3px solid #ff9800; white-space: pre-wrap; word-break: break-word; font-size: 0.85em; max-height: 120px; overflow-y: auto;">${preview.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div></div>`;
+                // Check if there's an existing llmRequest panel to update
+                let messagePreviews = '';
+                const existingRequest = streamContainer.querySelector('[data-message-type="llmRequest"]');
+                
+                if (payload.messages) {
+                    const systemMsg = payload.messages.find(m => m.role === 'system');
+                    const otherMsgs = payload.messages.filter(m => m.role !== 'system');
+                    
+                    if (systemMsg) {
+                        const content = typeof systemMsg.content === 'string' ? systemMsg.content : JSON.stringify(systemMsg.content);
+                        const preview = content.length > 150 ? content.substring(0, 150) + '. .' : content;
+                        messagePreviews += `<div style="margin-bottom: 10px;"><strong>📋 System Prompt:</strong><br><div style="background: #f0f0f0; padding: 6px; margin-top: 4px; border-left: 3px solid #ff9800; white-space: pre-wrap; word-break: break-word; font-size: 0.85em; max-height: 120px; overflow-y: auto;">${preview.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div></div>`;
+                    }
+                    
+                    otherMsgs.forEach((msg, idx) => {
+                        const content = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
+                        const preview = content.length > 200 ? content.substring(0, 200) + '. .' : content;
+                        const bgColor = msg.role === 'user' ? '#e3f2fd' : msg.role === 'assistant' ? '#f3e5f5' : '#fff3e0';
+                        const borderColor = msg.role === 'user' ? '#2196f3' : msg.role === 'assistant' ? '#9c27b0' : '#ff9800';
+                        const emoji = msg.role === 'user' ? '👤' : msg.role === 'assistant' ? '🤖' : '🔧';
+                        messagePreviews += `<div style="margin-bottom: 8px;"><strong>${emoji} ${msg.role.charAt(0).toUpperCase() + msg.role.slice(1)}:</strong><br><div style="background: ${bgColor}; padding: 6px; margin-top: 4px; border-left: 3px solid ${borderColor}; white-space: pre-wrap; word-break: break-word; font-size: 0.85em; max-height: 100px; overflow-y: auto;">${preview.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div></div>`;
+                    });
                 }
                 
-                otherMsgs.forEach((msg, idx) => {
-                    const content = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
-                    const preview = content.length > 200 ? content.substring(0, 200) + '...' : content;
-                    const bgColor = msg.role === 'user' ? '#e3f2fd' : msg.role === 'assistant' ? '#f3e5f5' : '#fff3e0';
-                    const borderColor = msg.role === 'user' ? '#2196f3' : msg.role === 'assistant' ? '#9c27b0' : '#ff9800';
-                    const emoji = msg.role === 'user' ? '👤' : msg.role === 'assistant' ? '🤖' : '🔧';
-                    messagePreviews += `<div style="margin-bottom: 8px;"><strong>${emoji} ${msg.role.charAt(0).toUpperCase() + msg.role.slice(1)}:</strong><br><div style="background: ${bgColor}; padding: 6px; margin-top: 4px; border-left: 3px solid ${borderColor}; white-space: pre-wrap; word-break: break-word; font-size: 0.85em; max-height: 100px; overflow-y: auto;">${preview.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div></div>`;
-                });
+                const statusText = update.duration > 0 ? `✅ Completed in ${update.duration}ms` : `⏳ Sending...`;
+                const content = `<details ${update.duration > 0 ? '' : 'open'}><summary>🔌 LLM Request ${statusText} (${estTokens} tokens)</summary>
+                    <div style="font-size: 0.9em; font-family: monospace;">
+                        <strong>Model:</strong> ${payload.model || 'unknown'}<br>
+                        <strong>Messages in history:</strong> ${msgCount}<br>
+                        <strong>Payload size:</strong> ${payloadSize} bytes<br>
+                        <strong>Estimated tokens:</strong> ~${estTokens}<br>
+                        <strong>Duration:</strong> ${update.duration}ms${messagePreviews ? '<br><br><strong>Message Details:</strong>' : ''}<div style="margin-top: 10px;">${messagePreviews}</div>
+                        <em style="color: #666; font-size: 0.85em; margin-top: 10px; display: block;">Detailed request logged to Extension Host output (View → Output → Vibey)</em>
+                    </div>
+                </details>`;
+                
+                if (existingRequest && update.duration > 0) {
+                    // Update existing request panel with actual duration
+                    existingRequest.innerHTML = content;
+                } else {
+                    // Create new request panel
+                    div.innerHTML = content;
+                    div.setAttribute('data-message-type', 'llmRequest');
+                    streamContainer.appendChild(div);
+                    streamContainer.scrollTop = streamContainer.scrollHeight;
+                }
             }
-            
-            const statusText = update.duration > 0 ? `✅ Completed in ${update.duration}ms` : `⏳ Sending...`;
-            const content = `<details ${update.duration > 0 ? '' : 'open'}><summary>🔌 LLM Request ${statusText} (${estTokens} tokens)</summary>
-                <div style="font-size: 0.9em; font-family: monospace;">
-                    <strong>Model:</strong> ${payload.model || 'unknown'}<br>
-                    <strong>Messages in history:</strong> ${msgCount}<br>
-                    <strong>Payload size:</strong> ${payloadSize} bytes<br>
-                    <strong>Estimated tokens:</strong> ~${estTokens}<br>
-                    <strong>Duration:</strong> ${update.duration}ms${messagePreviews ? '<br><br><strong>Message Details:</strong>' : ''}<div style="margin-top: 10px;">${messagePreviews}</div>
-                    <em style="color: #666; font-size: 0.85em; margin-top: 10px; display: block;">Detailed request logged to Extension Host output (View → Output → Vibey)</em>
-                </div>
-            </details>`;
-            
-            if (existingRequest && update.duration > 0) {
-                // Update existing request panel with actual duration
-                existingRequest.innerHTML = content;
-            } else {
-                // Create new request panel
-                div.innerHTML = content;
-                div.setAttribute('data-message-type', 'llmRequest');
-                getChatContainer().appendChild(div);
-            }
-            getChatContainer().scrollTop = getChatContainer().scrollHeight;
-            break;
+            return;
         case 'llmError':
-            // Display detailed LLM error with source
-            div.innerHTML = `<details open><summary>❌ LLM Error (${update.duration}ms)</summary>
+            // Display detailed LLM error in LLM Stream tab
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'message system-update';
+            errorDiv.innerHTML = `<details open><summary>❌ LLM Error (${update.duration}ms)</summary>
                 <div style="font-size: 0.9em; font-family: monospace; color: #d32f2f;">
                     <strong>Error:</strong> ${update.error || 'Unknown error'}<br>
                     <strong>Source:</strong> ${update.source || 'Unknown'}<br>
@@ -275,7 +295,12 @@ function handleAgentUpdate(update) {
                     </ul>
                 </div>
             </details>`;
-            break;
+            const llmStreamContainer = document.getElementById('llm-stream-container');
+            if (llmStreamContainer) {
+                llmStreamContainer.appendChild(errorDiv);
+                llmStreamContainer.scrollTop = llmStreamContainer.scrollHeight;
+            }
+            return;
     }
     getChatContainer().appendChild(div);
     getChatContainer().scrollTop = getChatContainer().scrollHeight;
