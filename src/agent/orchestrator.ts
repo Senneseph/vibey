@@ -110,9 +110,17 @@ When done, respond with plain text summarizing what you accomplished.
         const signal = this.abortController.signal;
         try {
             // Context block
+            console.log(`[VIBEY][Orchestrator] Starting chat with message length: ${userMessage.length} chars`);
+            console.log(`[VIBEY][Orchestrator] Context items: ${contextItems?.length || 0}`);
+            
+            const contextBlockStart = Date.now();
             const contextBlock = contextItems && contextItems.length > 0
                 ? await getContextForTask(this.contextManager, userMessage, contextItems)
                 : '';
+            const contextBlockTime = Date.now() - contextBlockStart;
+            
+            console.log(`[VIBEY][Orchestrator] Context resolution took ${contextBlockTime}ms`);
+            console.log(`[VIBEY][Orchestrator] Context block size: ${contextBlock.length} characters (~${Math.ceil(contextBlock.length / 4)} tokens)`);
             
             // Report context summary to UI
             if (contextItems && contextItems.length > 0 && onUpdate) {
@@ -126,7 +134,13 @@ When done, respond with plain text summarizing what you accomplished.
                 });
             }
             
-            pushHistory(this.context.history, { role: 'user', content: userMessage + contextBlock });
+            const fullMessage = userMessage + contextBlock;
+            console.log(`[VIBEY][Orchestrator] Full message size: ${fullMessage.length} chars (~${Math.ceil(fullMessage.length / 4)} tokens)`);
+            console.log(`[VIBEY][Orchestrator] System prompt size: ${this.context.history[0].content.length} chars (~${Math.ceil(this.context.history[0].content.length / 4)} tokens)`);
+            
+            pushHistory(this.context.history, { role: 'user', content: fullMessage });
+            console.log(`[VIBEY][Orchestrator] Total history size: ${JSON.stringify(this.context.history).length} bytes`);
+            
             if (onUpdate) onUpdate({ type: 'thinking', message: 'Strategic planning with full context window...' });
             const MAX_TURNS = 256;
             let turns = 0;
@@ -135,6 +149,29 @@ When done, respond with plain text summarizing what you accomplished.
                 if (signal.aborted) throw new Error('Request cancelled by user');
                 turns++;
                 if (onUpdate) onUpdate({ type: 'thinking', message: turns === 1 ? 'Analyzing request...' : `Turn ${turns}: Reasoning...` });
+                
+                // Log LLM request details before sending
+                const historySize = JSON.stringify(this.context.history).length;
+                const messageCount = this.context.history.length;
+                const estimatedTokens = Math.ceil(historySize / 4);
+                const requestStartTime = Date.now();
+                
+                console.log(`[VIBEY][Orchestrator] Sending LLM request - Messages: ${messageCount}, Size: ${historySize} bytes, Est. tokens: ${estimatedTokens}`);
+                
+                // Send request details to UI
+                if (onUpdate) {
+                    onUpdate({
+                        type: 'llmRequest',
+                        payload: {
+                            model: 'ollama',
+                            messages: this.context.history,
+                            messageCount: messageCount
+                        },
+                        estimatedTokens: estimatedTokens,
+                        duration: 0
+                    });
+                }
+                
                 const responseText = await callLLM(this.llm, this.context.history, signal);
                 if (signal.aborted) throw new Error('Request cancelled by user');
                 const parsed = parseLLMResponse(responseText);

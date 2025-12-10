@@ -42,11 +42,24 @@ function initApp() {
 
 // Global error handler
 window.onerror = function (message, source, lineno, colno, error) {
+    console.error(`[VIBEY][Webview] Global error: ${message} at ${source}:${lineno}:${colno}`);
     vscode.postMessage({
         type: 'error',
-        message: `UI Error: ${message}`
+        message: `UI Error: ${message}`,
+        source,
+        lineno,
+        colno
     });
 };
+
+// Also catch unhandled promise rejections
+window.addEventListener('unhandledrejection', event => {
+    console.error('[VIBEY][Webview] Unhandled promise rejection:', event.reason);
+    vscode.postMessage({
+        type: 'error',
+        message: `Unhandled error: ${event.reason?.message || event.reason}`
+    });
+});
 
 // Incoming Messages
 window.addEventListener('message', event => {
@@ -89,6 +102,23 @@ window.addEventListener('message', event => {
             if (container) {
                 container.scrollTop = container.scrollHeight;
             }
+            break;
+        case 'llmRequest':
+            // Display LLM request details in an expandable panel
+            handleAgentUpdate({
+                type: 'llmRequest',
+                payload: message.payload,
+                duration: message.duration
+            });
+            break;
+        case 'llmError':
+            // Display detailed LLM error
+            handleAgentUpdate({
+                type: 'llmError',
+                error: message.error,
+                duration: message.duration,
+                source: message.source
+            });
             break;
         case 'requestStopped':
             setProcessing(false, true);  // false for processing, true for resumable
