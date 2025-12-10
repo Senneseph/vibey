@@ -171,6 +171,7 @@ When done, respond with plain text summarizing what you accomplished.
                 const estimatedTokens = Math.ceil(historySize / 4);
                 const requestStartTime = Date.now();
                 console.log(`[VIBEY][Orchestrator] Sending LLM request - Messages: ${messageCount}, Size: ${historySize} bytes, Est. tokens: ${estimatedTokens}`);
+                console.log(`[VIBEY][Orchestrator] Waiting for Ollama response...`);
                 // Send request details to UI
                 if (onUpdate) {
                     onUpdate({
@@ -185,6 +186,21 @@ When done, respond with plain text summarizing what you accomplished.
                     });
                 }
                 const responseText = await (0, llm_utils_1.callLLM)(this.llm, this.context.history, signal);
+                // Calculate actual fetch duration and send update
+                const fetchDuration = Date.now() - requestStartTime;
+                console.log(`[VIBEY][Orchestrator] LLM response received in ${fetchDuration}ms`);
+                if (onUpdate) {
+                    onUpdate({
+                        type: 'llmRequest',
+                        payload: {
+                            model: 'ollama',
+                            messages: this.context.history,
+                            messageCount: messageCount
+                        },
+                        estimatedTokens: estimatedTokens,
+                        duration: fetchDuration
+                    });
+                }
                 if (signal.aborted)
                     throw new Error('Request cancelled by user');
                 const parsed = (0, llm_utils_1.parseLLMResponse)(responseText);

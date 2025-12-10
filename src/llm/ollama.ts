@@ -50,33 +50,45 @@ export class OllamaClient implements LLMProvider {
         };
 
         // Log request details
-        const totalTokens = JSON.stringify(payload).length / 4;
+        const payloadString = JSON.stringify(payload);
+        const totalTokens = payloadString.length / 4;
         console.log(`[VIBEY][Ollama] Sending request to ${baseUrl}/api/chat`);
         console.log(`[VIBEY][Ollama] Model: ${modelName}`);
         console.log(`[VIBEY][Ollama] Messages: ${payload.messages.length}`);
         console.log(`[VIBEY][Ollama] Estimated payload tokens: ~${Math.ceil(totalTokens)}`);
-        console.log(`[VIBEY][Ollama] Payload size: ${JSON.stringify(payload).length} bytes`);
+        console.log(`[VIBEY][Ollama] Payload size: ${payloadString.length} bytes`);
+        
+        // Log actual message content (truncated if too long)
+        payload.messages.forEach((msg, idx) => {
+            const contentStr = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
+            const preview = contentStr.length > 200 ? contentStr.substring(0, 200) + '...' : contentStr;
+            console.log(`[VIBEY][Ollama] Message ${idx} (${msg.role}): "${preview}"`);
+        });
 
         try {
-            console.log(`[VIBEY][Ollama] Initiating fetch request...`);
+            console.log(`[VIBEY][Ollama] Initiating fetch request at ${new Date().toISOString()}...`);
+            const fetchStartTime = Date.now();
             const response = await fetch(`${baseUrl}/api/chat`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
+                body: payloadString,
                 signal // Pass signal to fetch
             });
 
-            const elapsed = Date.now() - startTime;
-            console.log(`[VIBEY][Ollama] Fetch completed in ${elapsed}ms with status ${response.status}`);
+            const fetchElapsed = Date.now() - fetchStartTime;
+            const totalElapsed = Date.now() - startTime;
+            console.log(`[VIBEY][Ollama] Fetch completed in ${fetchElapsed}ms (total elapsed: ${totalElapsed}ms) with status ${response.status}`);
 
             if (!response.ok) {
                 throw new Error(`Ollama API error: ${response.statusText} (status ${response.status})`);
             }
 
+            console.log(`[VIBEY][Ollama] Parsing JSON response...`);
             const data = await response.json() as OllamaResponse;
 
-            const totalElapsed = Date.now() - startTime;
-            console.log(`[VIBEY][Ollama] Response received. Total time: ${totalElapsed}ms`);
+            const responseElapsed = Date.now() - fetchStartTime;
+            const totalElapsedFinal = Date.now() - startTime;
+            console.log(`[VIBEY][Ollama] Response parsed in ${responseElapsed}ms (total: ${totalElapsedFinal}ms)`);
             console.log(`[VIBEY][Ollama] Response tokens - prompt: ${data.prompt_eval_count}, generated: ${data.eval_count}`);
 
             // Track token usage
@@ -95,9 +107,22 @@ export class OllamaClient implements LLMProvider {
             console.error(`[VIBEY][Ollama] Error after ${totalElapsed}ms:`, error.message);
             
             if (error.name === 'AbortError') {
+                console.error(`[VIBEY][Ollama] Request was cancelled by user`);
                 throw new Error('Request cancelled by user');
             }
-            console.error(`[VIBEY][Ollama] Full error:`, error);
+            
+            // Detailed error logging
+            if (error instanceof TypeError && error.message.includes('fetch')) {
+                console.error(`[VIBEY][Ollama] Network/fetch error - possible causes:`);
+                console.error(`  - Ollama server not running at ${baseUrl}`);
+                console.error(`  - Invalid connection URL`);
+                console.error(`  - Network connectivity issue`);
+                console.error(`  - CORS issue if Ollama is remote`);
+            }
+            
+            console.error(`[VIBEY][Ollama] Full error object:`, error);
+            console.error(`[VIBEY][Ollama] Error name: ${error.name}`);
+            console.error(`[VIBEY][Ollama] Error stack:`, error.stack);
             throw error;
         }
     }

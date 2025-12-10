@@ -205,18 +205,32 @@ function handleAgentUpdate(update) {
             div.innerHTML = `<strong>📊 Token Usage:</strong> ${update.sent} sent, ${update.received} received`;
             break;
         case 'llmRequest':
-            // Display LLM request details
+            // Display LLM request details with message preview
             const payload = update.payload || {};
             const msgCount = payload.messages?.length || payload.messageCount || 0;
             const payloadSize = JSON.stringify(payload.messages || []).length;
             const estTokens = update.estimatedTokens || Math.ceil(payloadSize / 4);
-            div.innerHTML = `<details><summary>🔌 LLM Request Sent (${estTokens} tokens, ${update.duration}ms)</summary>
+            
+            // Create message preview
+            let messagePreview = '';
+            if (payload.messages && Array.isArray(payload.messages)) {
+                const lastMsg = payload.messages[payload.messages.length - 1];
+                if (lastMsg) {
+                    const content = typeof lastMsg.content === 'string' ? lastMsg.content : JSON.stringify(lastMsg.content);
+                    const preview = content.length > 300 ? content.substring(0, 300) + '...' : content;
+                    messagePreview = `<br><strong>Last message preview:</strong><br><div style="background: #f5f5f5; padding: 8px; margin: 5px 0; border-left: 3px solid #0066cc; white-space: pre-wrap; word-break: break-word; max-height: 200px; overflow-y: auto;">${preview.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>`;
+                }
+            }
+            
+            const statusText = update.duration > 0 ? `✅ Completed in ${update.duration}ms` : `⏳ Sending...`;
+            div.innerHTML = `<details><summary>🔌 LLM Request ${statusText} (${estTokens} tokens)</summary>
                 <div style="font-size: 0.9em; font-family: monospace;">
                     <strong>Model:</strong> ${payload.model || 'unknown'}<br>
-                    <strong>Messages:</strong> ${msgCount}<br>
+                    <strong>Messages in history:</strong> ${msgCount}<br>
                     <strong>Payload size:</strong> ${payloadSize} bytes<br>
                     <strong>Estimated tokens:</strong> ~${estTokens}<br>
-                    <strong>Duration:</strong> ${update.duration}ms
+                    <strong>Duration:</strong> ${update.duration}ms${messagePreview}<br>
+                    <em style="color: #666; font-size: 0.85em;">Detailed request logged to Extension Host output (View → Output → Vibey)</em>
                 </div>
             </details>`;
             break;
