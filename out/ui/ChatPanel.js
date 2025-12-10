@@ -311,6 +311,7 @@ class ChatPanel {
             <div class="tabs">
                 <div class="tab active" data-tab="chat">Chat</div>
                 <div class="tab" data-tab="tasks">Tasks</div>
+                <div class="tab" data-tab="llm-stream">LLM Stream</div>
             </div>
 
             <div id="chat-view" class="view active">
@@ -336,6 +337,13 @@ class ChatPanel {
                 <div id="task-list">
                     <!-- Tasks will be rendered here -->
                     <div class="empty-state">No active tasks. Ask Vibey to start a task!</div>
+                </div>
+            </div>
+
+            <div id="llm-stream-view" class="view">
+                <div id="llm-stream-container">
+                    <!-- LLM stream updates will be rendered here -->
+                    <div class="empty-state">LLM stream updates will appear here</div>
                 </div>
             </div>
 

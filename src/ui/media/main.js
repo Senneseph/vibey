@@ -61,6 +61,42 @@ window.addEventListener('unhandledrejection', event => {
     });
 });
 
+// Scroll to bottom button
+let scrollToBottomButton = null;
+
+// Create scroll to bottom button
+function createScrollToBottomButton() {
+    if (scrollToBottomButton) return;
+    
+    scrollToBottomButton = document.createElement('button');
+    scrollToBottomButton.id = 'scroll-to-bottom';
+    scrollToBottomButton.className = 'scroll-to-bottom-btn';
+    scrollToBottomButton.innerHTML = '↓';
+    scrollToBottomButton.title = 'Scroll to bottom';
+    scrollToBottomButton.style.display = 'none';
+    
+    scrollToBottomButton.addEventListener('click', () => {
+        const chatContainer = getChatContainer();
+        if (chatContainer) {
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+    });
+    
+    document.body.appendChild(scrollToBottomButton);
+}
+
+// Check if scroll is needed
+function checkScrollPosition() {
+    const chatContainer = getChatContainer();
+    if (!chatContainer || !scrollToBottomButton) return;
+    
+    const { scrollTop, scrollHeight, clientHeight } = chatContainer;
+    const isAtBottom = scrollTop + clientHeight >= scrollHeight - 5; // 5px tolerance
+    
+    // Show/hide scroll to bottom button
+    scrollToBottomButton.style.display = isAtBottom ? 'none' : 'block';
+}
+
 // Incoming Messages
 window.addEventListener('message', event => {
     const message = event.data;
@@ -100,7 +136,11 @@ window.addEventListener('message', event => {
             renderMessage(message.role, message.content, message.timestamp);
             const container = getChatContainer();
             if (container) {
-                container.scrollTop = container.scrollHeight;
+                // Only auto-scroll if we're already at the bottom
+                const isAtBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 5;
+                if (isAtBottom) {
+                    container.scrollTop = container.scrollHeight;
+                }
             }
             break;
         case 'llmRequest':
@@ -139,13 +179,22 @@ window.addEventListener('message', event => {
         case 'agentUpdate':
             handleAgentUpdate(message.update);
             break;
-
     }
 });
 
 // Initialize the application when DOM is loaded
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initApp);
+    document.addEventListener('DOMContentLoaded', function() {
+        initApp();
+        createScrollToBottomButton();
+    });
 } else {
     initApp();
+    createScrollToBottomButton();
+}
+
+// Add scroll event listener to monitor scrolling
+const chatContainer = getChatContainer();
+if (chatContainer) {
+    chatContainer.addEventListener('scroll', checkScrollPosition);
 }

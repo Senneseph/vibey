@@ -582,3 +582,31 @@ body.theme-light {
     margin-left: 4px;
     display: inline-block;
 }
+
+/* Scroll to bottom button */
+.scroll-to-bottom-btn {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    border: none;
+    font-size: 18px;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    z-index: 1000;
+    display: none;
+    transition: all 0.3s ease;
+}
+
+.scroll-to-bottom-btn:hover {
+    transform: scale(1.1);
+    background: var(--vscode-button-hoverBackground);
+}
+
+.scroll-to-bottom-btn:active {
+    transform: scale(0.95);
+}
