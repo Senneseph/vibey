@@ -19,6 +19,8 @@ import { createEditorTools } from './tools/definitions/editor';
 import { HistoryManager } from './agent/history_manager';
 import { McpService } from './agent/mcp/mcp_service';
 import { MetricsCollector } from './agent/metrics/metrics_collector';
+import { createSearchTools } from './tools/definitions/search';
+import { ContextManager } from './agent/context_manager';
 
 // Module-level references for cleanup
 let mcpService: McpService | undefined;
@@ -61,6 +63,10 @@ export function activate(context: vscode.ExtensionContext) {
     // Register editor awareness tools
     const editorTools = createEditorTools();
     editorTools.forEach(t => gateway.registerTool(t));
+
+    // Register search tools
+    const searchTools = createSearchTools(new ContextManager());
+    searchTools.forEach(t => gateway.registerTool(t));
 
     // Initialize MCP Service for external tool discovery
     mcpService = new McpService(gateway, context);
