@@ -9,6 +9,7 @@
 - **Autonomous Agents**: Vibey can plan, execute tools, and verify its own work.
 - **Unified Chat & Tasks**: seamlessly switch between chat and structured task tracking.
 - **Attention Management**: Advanced context management with checkpoint system to clear working context once items are completed.
+- **Internet Search & RAG**: Search the internet with vectorized caching and retrieval-augmented generation capabilities.
 - **Tool Ecosystem**:
     - **Filesystem**: Read, write, list files, and scan projects.
     - **Terminal**: Run commands, managing long-running processes (servers, watchers).
@@ -28,6 +29,12 @@
 
 - `vibey.autoRunTools`: Allow trusted tools to run without approval (default: false).
 - `vibey.mcpServers`: Configure external tools via MCP.
+
+## New in Version 0.5.0
+
+- **Internet Search Capabilities**: Added ability to search the internet with caching and vectorization
+- **RAG Implementation**: Retrieval-Augmented Generation for better contextual understanding
+- **Code Snippet Fetching**: Ability to fetch and cache code snippets from online repositories
 
 ## License
 

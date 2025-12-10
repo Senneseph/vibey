@@ -2,9 +2,6 @@ import { ToolDefinition } from '../schema';
 import { z } from 'zod';
 import { VectorDatabase } from '../../agent/vectorization';
 import { ContextManager } from '../../agent/context_manager';
-import * as https from 'https';
-import * as http from 'http';
-import * as url from 'url';
 
 // Mock implementation for now - in a real implementation this would connect to actual search APIs
 export function createSearchTools(contextManager: ContextManager): ToolDefinition[] {
@@ -32,7 +29,7 @@ export function createSearchTools(contextManager: ContextManager): ToolDefinitio
                     
                     // If we have cached results, return them
                     if (cachedResults && cachedResults.length > 0) {
-                        const resultContent = cachedResults.map(r => `ID: ${r.id}, Similarity: ${r.similarity}`).join('\n');
+                        const resultContent = cachedResults.map(r => `ID: ${r.id}, Similarity: ${r.similarity.toFixed(3)}`).join('\n');
                         return `Found cached results for query "${params.query}":\n${resultContent}`;
                     }
                 } catch (e) {
@@ -95,30 +92,7 @@ export function createSearchTools(contextManager: ContextManager): ToolDefinitio
                 
                 // In a real implementation, this would fetch from the URL
                 // For now, we'll simulate fetching code
-                const mockCode = `// Mock code snippet from ${params.url}
-// ${params.description || 'Code snippet from online source'}
-
-function mockFunction() {
-    // This would be actual code from the source
-    console.log('This is a mock implementation of fetching code from online sources');
-    
-    // In a real implementation, this would be actual code from the URL
-    return 'Sample code result';
-}
-
-// This demonstrates how source code would be fetched and cached for future RAG retrieval
-const codeExample = {
-    source: '${params.url}',
-    description: '${params.description || 'No description provided'}',
-    content: 'Mock code content that would be retrieved from online sources'
-};
-
-console.log('Code fetched successfully');
-
-// In a real implementation, this would be cached using vectorization for semantic similarity search
-// The system would store the vector representation of this code snippet for future retrieval
-
-return JSON.stringify(codeExample, null, 2);`;
+                const mockCode = `// Mock code snippet from ${params.url}\n// ${params.description || 'Code snippet from online source'}\n\nfunction mockFunction() {\n    // This would be actual code from the source\n    console.log('This is a mock implementation of fetching code from online sources');\n    \n    // In a real implementation, this would be actual code from the URL\n    return 'Sample code result';\n}\n\n// This demonstrates how source code would be fetched and cached for future RAG retrieval\nconst codeExample = {\n    source: '${params.url}',\n    description: '${params.description || 'No description provided'}',\n    content: 'Mock code content that would be retrieved from online sources'\n};\n\nconsole.log('Code fetched successfully');\n\n// In a real implementation, this would be cached using vectorization for semantic similarity search\n// The system would store the vector representation of this code snippet for future retrieval\n\nreturn JSON.stringify(codeExample, null, 2);`;
                 
                 // Cache the code snippet using vectorization
                 await vectorDB.addDocument(`code_snippet_${Date.now()}`, mockCode);
