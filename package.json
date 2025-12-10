@@ -3,7 +3,7 @@
     "displayName": "Vibey",
     "description": "Offline-first AI Coding Agent",
     "publisher": "vibey-project",
-    "version": "0.4.12",
+    "version": "0.5.0",
     "icon": "icon.png",
     "repository": {
         "type": "git",
@@ -185,9 +185,6 @@
     },
     "dependencies": {
         "@modelcontextprotocol/sdk": "^1.24.3",
-        "zod": "^3.23.8",
-        "chroma-client": "^1.0.0",
-        "googleapis": "^127.0.0",
-        "vector-db": "^0.1.0"
+        "zod": "^3.23.8"
     }
 }

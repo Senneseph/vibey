@@ -14,7 +14,7 @@ export interface VectorSearchResult {
 }
 
 // Mock implementation of vector database
-// In a real implementation, this would connect to Chroma, Weaviate, or similar vector databases
+// This simulates vectorization and caching capabilities
 export class VectorDatabase {
   private documents: Map<string, VectorDocument> = new Map();
   
