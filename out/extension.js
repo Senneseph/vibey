@@ -182,6 +182,45 @@ function activate(context) {
             }
         });
     });
+    const diagnosticCommand = vscode.commands.registerCommand('vibey.diagnostics', async () => {
+        const config = vscode.workspace.getConfiguration('vibey');
+        const ollamaUrl = config.get('ollamaUrl') || 'http://localhost:11434';
+        const model = config.get('model') || 'Qwen3-coder:latest';
+        vscode.window.showInformationMessage('🔍 Running Vibey diagnostics...', { modal: true });
+        try {
+            // Test Ollama connection
+            console.log('[VIBEY][Diagnostic] Testing Ollama connection...');
+            const healthResponse = await fetch(`${ollamaUrl}/api/tags`);
+            const isHealthy = healthResponse.ok;
+            let diagnosticsText = `Vibey Diagnostics Report\n\n`;
+            diagnosticsText += `Ollama Settings:\n`;
+            diagnosticsText += `- URL: ${ollamaUrl}\n`;
+            diagnosticsText += `- Model: ${model}\n`;
+            diagnosticsText += `- Connection: ${isHealthy ? '✅ OK' : '❌ FAILED'}\n\n`;
+            if (isHealthy) {
+                const data = await healthResponse.json();
+                const models = data.models || [];
+                diagnosticsText += `Available Models (${models.length}):\n`;
+                models.forEach((m) => {
+                    const isCurrentModel = m.name === model;
+                    diagnosticsText += `${isCurrentModel ? '✓' : ' '} ${m.name}\n`;
+                });
+            }
+            else {
+                diagnosticsText += `❌ Cannot reach Ollama server.\n`;
+                diagnosticsText += `Make sure:\n`;
+                diagnosticsText += `1. Run: ollama serve\n`;
+                diagnosticsText += `2. Check URL is correct: ${ollamaUrl}\n`;
+                diagnosticsText += `3. Check firewall/network\n`;
+            }
+            console.log('[VIBEY][Diagnostic] Diagnostics:\n' + diagnosticsText);
+            vscode.window.showInformationMessage('Diagnostics complete. Check Extension Host output for details.', { modal: true });
+        }
+        catch (error) {
+            console.error('[VIBEY][Diagnostic] Error:', error);
+            vscode.window.showErrorMessage(`Diagnostic failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+    });
     context.subscriptions.push(startCommand);
     context.subscriptions.push(settingsCommand);
     context.subscriptions.push(selectModelCommand);
@@ -189,6 +228,7 @@ function activate(context) {
     context.subscriptions.push(mcpStatusCommand);
     context.subscriptions.push(mcpReloadCommand);
     context.subscriptions.push(mcpListToolsCommand);
+    context.subscriptions.push(diagnosticCommand);
 }
 function getMetricsCollector() {
     return metricsCollector;

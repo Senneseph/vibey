@@ -3,7 +3,7 @@
     "displayName": "Vibey",
     "description": "Offline-first AI Coding Agent",
     "publisher": "vibey-project",
-    "version": "0.4.9",
+    "version": "0.4.12",
     "icon": "icon.png",
     "repository": {
         "type": "git",
@@ -107,6 +107,11 @@
                 "command": "vibey.mcpListTools",
                 "title": "Vibey: List All Tools",
                 "icon": "$(tools)"
+            },
+            {
+                "command": "vibey.diagnostics",
+                "title": "Vibey: Run Diagnostics",
+                "icon": "$(debug)"
             }
         ],
         "viewsContainers": {
