@@ -211,28 +211,53 @@ function handleAgentUpdate(update) {
             const payloadSize = JSON.stringify(payload.messages || []).length;
             const estTokens = update.estimatedTokens || Math.ceil(payloadSize / 4);
             
-            // Create message preview
-            let messagePreview = '';
+            // Check if there's an existing llmRequest panel to update
+            const existingRequest = Array.from(getChatContainer().querySelectorAll('[data-message-type="llmRequest"]')).pop();
+            
+            // Create message previews for all messages
+            let messagePreviews = '';
             if (payload.messages && Array.isArray(payload.messages)) {
-                const lastMsg = payload.messages[payload.messages.length - 1];
-                if (lastMsg) {
-                    const content = typeof lastMsg.content === 'string' ? lastMsg.content : JSON.stringify(lastMsg.content);
-                    const preview = content.length > 300 ? content.substring(0, 300) + '...' : content;
-                    messagePreview = `<br><strong>Last message preview:</strong><br><div style="background: #f5f5f5; padding: 8px; margin: 5px 0; border-left: 3px solid #0066cc; white-space: pre-wrap; word-break: break-word; max-height: 200px; overflow-y: auto;">${preview.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>`;
+                const systemMsg = payload.messages.find(m => m.role === 'system');
+                const otherMsgs = payload.messages.filter(m => m.role !== 'system');
+                
+                if (systemMsg) {
+                    const content = typeof systemMsg.content === 'string' ? systemMsg.content : JSON.stringify(systemMsg.content);
+                    const preview = content.length > 150 ? content.substring(0, 150) + '...' : content;
+                    messagePreviews += `<div style="margin-bottom: 10px;"><strong>📋 System Prompt:</strong><br><div style="background: #f0f0f0; padding: 6px; margin-top: 4px; border-left: 3px solid #ff9800; white-space: pre-wrap; word-break: break-word; font-size: 0.85em; max-height: 120px; overflow-y: auto;">${preview.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div></div>`;
                 }
+                
+                otherMsgs.forEach((msg, idx) => {
+                    const content = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
+                    const preview = content.length > 200 ? content.substring(0, 200) + '...' : content;
+                    const bgColor = msg.role === 'user' ? '#e3f2fd' : msg.role === 'assistant' ? '#f3e5f5' : '#fff3e0';
+                    const borderColor = msg.role === 'user' ? '#2196f3' : msg.role === 'assistant' ? '#9c27b0' : '#ff9800';
+                    const emoji = msg.role === 'user' ? '👤' : msg.role === 'assistant' ? '🤖' : '🔧';
+                    messagePreviews += `<div style="margin-bottom: 8px;"><strong>${emoji} ${msg.role.charAt(0).toUpperCase() + msg.role.slice(1)}:</strong><br><div style="background: ${bgColor}; padding: 6px; margin-top: 4px; border-left: 3px solid ${borderColor}; white-space: pre-wrap; word-break: break-word; font-size: 0.85em; max-height: 100px; overflow-y: auto;">${preview.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div></div>`;
+                });
             }
             
             const statusText = update.duration > 0 ? `✅ Completed in ${update.duration}ms` : `⏳ Sending...`;
-            div.innerHTML = `<details><summary>🔌 LLM Request ${statusText} (${estTokens} tokens)</summary>
+            const content = `<details ${update.duration > 0 ? '' : 'open'}><summary>🔌 LLM Request ${statusText} (${estTokens} tokens)</summary>
                 <div style="font-size: 0.9em; font-family: monospace;">
                     <strong>Model:</strong> ${payload.model || 'unknown'}<br>
                     <strong>Messages in history:</strong> ${msgCount}<br>
                     <strong>Payload size:</strong> ${payloadSize} bytes<br>
                     <strong>Estimated tokens:</strong> ~${estTokens}<br>
-                    <strong>Duration:</strong> ${update.duration}ms${messagePreview}<br>
-                    <em style="color: #666; font-size: 0.85em;">Detailed request logged to Extension Host output (View → Output → Vibey)</em>
+                    <strong>Duration:</strong> ${update.duration}ms${messagePreviews ? '<br><br><strong>Message Details:</strong>' : ''}<div style="margin-top: 10px;">${messagePreviews}</div>
+                    <em style="color: #666; font-size: 0.85em; margin-top: 10px; display: block;">Detailed request logged to Extension Host output (View → Output → Vibey)</em>
                 </div>
             </details>`;
+            
+            if (existingRequest && update.duration > 0) {
+                // Update existing request panel with actual duration
+                existingRequest.innerHTML = content;
+            } else {
+                // Create new request panel
+                div.innerHTML = content;
+                div.setAttribute('data-message-type', 'llmRequest');
+                getChatContainer().appendChild(div);
+            }
+            getChatContainer().scrollTop = getChatContainer().scrollHeight;
             break;
         case 'llmError':
             // Display detailed LLM error with source

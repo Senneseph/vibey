@@ -43,8 +43,15 @@ export class AgentOrchestrator {
     private getSystemPrompt(): string {
         // Get configuration settings
         const config = vscode.workspace.getConfiguration('vibey');
-        const rules = config.get('rules', {});
-        const userGuidelines = config.get('userGuidelines', '');
+        const rules = config.get<Record<string, string>>('rules', {});
+        const userGuidelines = config.get<string>('userGuidelines', '');
+        
+        console.log(`[VIBEY][Orchestrator] Loading system prompt...`);
+        console.log(`[VIBEY][Orchestrator] User guidelines present: ${userGuidelines ? 'YES' : 'NO'}`);
+        if (userGuidelines) {
+            console.log(`[VIBEY][Orchestrator] User guidelines content: ${userGuidelines.substring(0, 200)}${userGuidelines.length > 200 ? '...' : ''}`);
+        }
+        console.log(`[VIBEY][Orchestrator] Rules present: ${Object.keys(rules).length > 0 ? 'YES' : 'NO'}`);
         
         // Format rules for inclusion in system prompt
         let rulesContent = '';
@@ -158,6 +165,14 @@ When done, respond with plain text summarizing what you accomplished.
                 
                 console.log(`[VIBEY][Orchestrator] Sending LLM request - Messages: ${messageCount}, Size: ${historySize} bytes, Est. tokens: ${estimatedTokens}`);
                 console.log(`[VIBEY][Orchestrator] Waiting for Ollama response...`);
+                
+                // Log each message in history
+                this.context.history.forEach((msg, idx) => {
+                    const contentPreview = typeof msg.content === 'string' 
+                        ? msg.content.substring(0, 100) + (msg.content.length > 100 ? '...' : '')
+                        : JSON.stringify(msg.content).substring(0, 100) + '...';
+                    console.log(`[VIBEY][Orchestrator] History[${idx}] (${msg.role}): ${contentPreview}`);
+                });
                 
                 // Send request details to UI
                 if (onUpdate) {

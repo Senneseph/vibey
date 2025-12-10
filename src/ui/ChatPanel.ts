@@ -146,7 +146,24 @@ export class ChatPanel implements vscode.WebviewViewProvider {
                             }
                         }
                     } catch (e: any) {
-                        console.error('[VIBEY][ChatPanel] Error in chat:', e);
+                        const elapsed = Date.now() - (data.startTime || 0);
+                        console.error('[VIBEY][ChatPanel] ❌ Error in chat after', elapsed, 'ms');
+                        console.error('[VIBEY][ChatPanel] Error type:', e.constructor.name);
+                        console.error('[VIBEY][ChatPanel] Error message:', e.message);
+                        console.error('[VIBEY][ChatPanel] Error details:', e);
+                        
+                        // Diagnose the error
+                        if (e.message.includes('fetch') || e.message.includes('Cannot')) {
+                            console.error('[VIBEY][ChatPanel] 💡 Diagnosis: Network error - Ollama server may be unreachable');
+                            console.error('[VIBEY][ChatPanel] Recommendation: Check Extension Host output for Ollama diagnostics');
+                        } else if (e.message.includes('JSON')) {
+                            console.error('[VIBEY][ChatPanel] 💡 Diagnosis: Response parsing error - Ollama response is invalid');
+                            console.error('[VIBEY][ChatPanel] Recommendation: Model may be crashing, check Ollama logs');
+                        } else if (e.message.includes('timeout')) {
+                            console.error('[VIBEY][ChatPanel] 💡 Diagnosis: Request timeout - Ollama took too long to respond');
+                            console.error('[VIBEY][ChatPanel] Recommendation: Check if model is loaded and Ollama is responsive');
+                        }
+                        
                         const errorMsg = e.message || 'Unknown error';
                         if (this.webviewReady) {
                             // Send detailed error information to webview
@@ -154,7 +171,7 @@ export class ChatPanel implements vscode.WebviewViewProvider {
                                 type: 'llmError',
                                 error: errorMsg,
                                 source: e.stack ? e.stack.split('\n')[0] : 'Unknown',
-                                duration: Date.now() - (data.startTime || 0)
+                                duration: elapsed
                             });
                             this._view?.webview.postMessage({ type: 'addMessage', role: 'assistant', content: `**Error:** ${errorMsg}` });
                         }
