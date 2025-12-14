@@ -3,11 +3,11 @@
     "displayName": "Vibey",
     "description": "Offline-first AI Coding Agent",
     "publisher": "vibey-project",
-    "version": "0.5.2",
+    "version": "0.5.3",
     "icon": "icon.png",
     "repository": {
         "type": "git",
-        "url": "https://github.com/vibey-project/vibey"
+        "url": "https://github.com/Senneseph/vibey"
     },
     "engines": {
         "vscode": "^1.90.0"
@@ -132,13 +132,6 @@
                     "title": "Vibey",
                     "icon": "icon.png"
                 }
-            ],
-            "secondarySidebar": [
-                {
-                    "id": "vibey-auxiliary",
-                    "title": "Vibey",
-                    "icon": "icon.png"
-                }
             ]
         },
         "views": {
@@ -147,14 +140,6 @@
                     "icon": "icon.png",
                     "type": "webview",
                     "id": "vibey.chatView",
-                    "name": "Chat"
-                }
-            ],
-            "vibey-auxiliary": [
-                {
-                    "icon": "icon.png",
-                    "type": "webview",
-                    "id": "vibey.chatViewAux",
                     "name": "Chat"
                 }
             ]
