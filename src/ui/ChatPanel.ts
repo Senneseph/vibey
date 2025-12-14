@@ -36,9 +36,18 @@ export class ChatPanel implements vscode.WebviewViewProvider {
             localResourceRoots: [this._extensionUri]
         };
 
-        // Pre-load history before setting HTML
-        this.currentHistory = await this.historyManager.loadHistory();
-        console.log('[VIBEY][ChatPanel] Loaded history:', this.currentHistory);
+        // Pre-load history before setting HTML - with error handling
+        try {
+            this.currentHistory = await this.historyManager.loadHistory();
+            // Truncate log to prevent memory issues with large histories
+            const historyPreview = this.currentHistory.length > 0
+                ? `[${this.currentHistory.length} messages, first: "${this.currentHistory[0]?.role}"]`
+                : '[]';
+            console.log('[VIBEY][ChatPanel] Loaded history:', historyPreview);
+        } catch (error: any) {
+            console.error('[VIBEY][ChatPanel] Failed to load history:', error?.message);
+            this.currentHistory = []; // Use empty history on error
+        }
 
         webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
 
@@ -50,9 +59,9 @@ export class ChatPanel implements vscode.WebviewViewProvider {
                     this.webviewReady = true;
 
                     // Restore History
-                    console.log('[VIBEY][ChatPanel] webviewReady received. History:', this.currentHistory);
+                    console.log('[VIBEY][ChatPanel] webviewReady received. History length:', this.currentHistory.length);
                     if (this.currentHistory.length > 0) {
-                        console.log('[VIBEY][ChatPanel] Posting restoreHistory to webview:', this.currentHistory);
+                        console.log('[VIBEY][ChatPanel] Posting restoreHistory to webview, message count:', this.currentHistory.length);
                         this._view?.webview.postMessage({
                             type: 'restoreHistory',
                             messages: this.currentHistory
@@ -151,7 +160,7 @@ export class ChatPanel implements vscode.WebviewViewProvider {
                         console.error('[VIBEY][ChatPanel] Error type:', e.constructor.name);
                         console.error('[VIBEY][ChatPanel] Error message:', e.message);
                         console.error('[VIBEY][ChatPanel] Error details:', e);
-                        
+
                         // Diagnose the error
                         if (e.message.includes('fetch') || e.message.includes('Cannot')) {
                             console.error('[VIBEY][ChatPanel] 💡 Diagnosis: Network error - Ollama server may be unreachable');
@@ -163,7 +172,7 @@ export class ChatPanel implements vscode.WebviewViewProvider {
                             console.error('[VIBEY][ChatPanel] 💡 Diagnosis: Request timeout - Ollama took too long to respond');
                             console.error('[VIBEY][ChatPanel] Recommendation: Check if model is loaded and Ollama is responsive');
                         }
-                        
+
                         const errorMsg = e.message || 'Unknown error';
                         if (this.webviewReady) {
                             // Send detailed error information to webview
