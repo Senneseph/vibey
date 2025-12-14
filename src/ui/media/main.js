@@ -179,6 +179,16 @@ window.addEventListener('message', event => {
         case 'agentUpdate':
             handleAgentUpdate(message.update);
             break;
+        case 'clearChat':
+            // Clear the chat container
+            const chatContainerToClear = getChatContainer();
+            if (chatContainerToClear) {
+                chatContainerToClear.innerHTML = '';
+            }
+            // Reset processing state
+            setProcessing(false, false);
+            updateSendButtonState();
+            break;
     }
 });
 

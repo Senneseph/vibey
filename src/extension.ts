@@ -230,6 +230,25 @@ export function activate(context: vscode.ExtensionContext) {
             }
         });
 
+        const clearHistoryCommand = vscode.commands.registerCommand('vibey.clearHistory', async () => {
+            const confirm = await vscode.window.showWarningMessage(
+                'Are you sure you want to clear all chat history? This cannot be undone.',
+                { modal: true },
+                'Clear History'
+            );
+
+            if (confirm === 'Clear History') {
+                try {
+                    await historyManager.clearHistory();
+                    await chatProvider.clearChatPanel();
+                    vscode.window.showInformationMessage('✅ Chat history cleared successfully!');
+                } catch (error) {
+                    console.error('[VIBEY][ClearHistory] Error:', error);
+                    vscode.window.showErrorMessage(`Failed to clear history: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                }
+            }
+        });
+
         context.subscriptions.push(startCommand);
         context.subscriptions.push(settingsCommand);
         context.subscriptions.push(selectModelCommand);
@@ -238,6 +257,7 @@ export function activate(context: vscode.ExtensionContext) {
         context.subscriptions.push(mcpReloadCommand);
         context.subscriptions.push(mcpListToolsCommand);
         context.subscriptions.push(diagnosticCommand);
+        context.subscriptions.push(clearHistoryCommand);
 
         console.log('[VIBEY][activate] Extension activated successfully!');
     } catch (error: any) {
