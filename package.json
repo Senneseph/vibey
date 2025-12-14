@@ -3,7 +3,7 @@
     "displayName": "Vibey",
     "description": "Offline-first AI Coding Agent",
     "publisher": "vibey-project",
-    "version": "0.5.3",
+    "version": "0.5.4",
     "icon": "icon.png",
     "repository": {
         "type": "git",
@@ -123,6 +123,11 @@
                 "command": "vibey.diagnostics",
                 "title": "Vibey: Run Diagnostics",
                 "icon": "$(debug)"
+            },
+            {
+                "command": "vibey.clearHistory",
+                "title": "Vibey: Clear Chat History",
+                "icon": "$(trash)"
             }
         ],
         "viewsContainers": {

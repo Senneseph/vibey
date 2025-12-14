@@ -302,6 +302,22 @@ export class ChatPanel implements vscode.WebviewViewProvider {
         }
     }
 
+    /**
+     * Clear the chat panel UI and in-memory history
+     * Called when user clears chat history
+     */
+    public async clearChatPanel() {
+        // Clear in-memory history
+        this.currentHistory = [];
+
+        // Clear the webview UI
+        if (this.webviewReady && this._view) {
+            this._view.webview.postMessage({
+                type: 'clearChat'
+            });
+        }
+    }
+
     private _getHtmlForWebview(webview: vscode.Webview) {
         const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'src', 'ui', 'media', 'main.js'));
         return `<!DOCTYPE html>
