@@ -3,7 +3,7 @@
     "displayName": "Vibey",
     "description": "Offline-first AI Coding Agent",
     "publisher": "vibey-project",
-    "version": "0.5.4",
+    "version": "0.5.5",
     "icon": "icon.png",
     "repository": {
         "type": "git",
@@ -21,6 +21,15 @@
         "configuration": {
             "title": "Vibey",
             "properties": {
+                "vibey.provider": {
+                    "type": "string",
+                    "enum": [
+                        "ollama",
+                        "openai-compatible"
+                    ],
+                    "default": "ollama",
+                    "description": "Select the LLM provider: Ollama or OpenAI-compatible (e.g., Ollama, LM Studio, etc.)"
+                },
                 "vibey.ollamaUrl": {
                     "type": "string",
                     "default": "http://localhost:11434",
@@ -29,7 +38,17 @@
                 "vibey.model": {
                     "type": "string",
                     "default": "Qwen3-coder:latest",
-                    "description": "Name of the model to use in Ollama"
+                    "description": "Name of the model to use in Ollama or OpenAI-compatible server"
+                },
+                "vibey.openaiBaseUrl": {
+                    "type": "string",
+                    "default": "http://localhost:11434/v1",
+                    "description": "Base URL of the OpenAI-compatible API server (e.g., http://192.168.1.83:8080/v1)"
+                },
+                "vibey.openaiApiKey": {
+                    "type": "string",
+                    "default": "",
+                    "description": "API key for OpenAI-compatible server (if required)"
                 },
                 "vibey.autoRunTools": {
                     "type": "boolean",
