@@ -70,7 +70,7 @@ export function createFileSystemTools(policy: PolicyEngine, workspaceRoot: strin
                 }
 
                 await walk(workspaceRoot);
-                return `Project Files (${entries.length}):\n` + entries.slice(0, 100).join('\n') + (entries.length > 100 ? `\n... ${entries.length - 100} more files` : '');
+                return `Project Files (${entries.length}):\n` + entries.join('\n');
             }
         }
     ];

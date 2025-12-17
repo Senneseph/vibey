@@ -194,6 +194,8 @@ body.theme-light {
     color: var(--vscode-descriptionForeground);
     font-style: italic;
     animation: fadeIn 0.3s ease;
+    word-wrap: break-word;
+    white-space: pre-wrap;
 }
 
 
@@ -212,6 +214,8 @@ body.theme-light {
     border-left: 3px solid var(--vscode-notificationsInfoIcon-foreground);
     padding: 0;
     overflow: hidden;
+    word-wrap: break-word;
+    white-space: pre-wrap;
 }
 
 .message.tool-call.running {
