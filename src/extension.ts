@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { AgentOrchestrator } from './agent/orchestrator';
 import { OllamaClient } from './llm/ollama';
+import { OpenAICompatibleClient } from './llm/openai_compatible';
 import { ToolGateway } from './tools/gateway';
 import { PolicyEngine } from './security/policy_engine';
 
@@ -75,7 +76,17 @@ export function activate(context: vscode.ExtensionContext) {
             console.error('[Vibey] Failed to initialize MCP service:', err);
         });
 
-        const llm = new OllamaClient();
+        // Create LLM provider based on configuration
+        const config = vscode.workspace.getConfiguration('vibey');
+        const provider = config.get<string>('provider') || 'ollama';
+        let llm: any;
+        
+        if (provider === 'openai-compatible') {
+            llm = new OpenAICompatibleClient();
+        } else {
+            llm = new OllamaClient();
+        }
+        
         const orchestrator = new AgentOrchestrator(llm, gateway, workspaceRoot);
 
         const historyManager = new DailyHistoryManager(context, workspaceRoot);
@@ -110,14 +121,26 @@ export function activate(context: vscode.ExtensionContext) {
 
         const selectModelCommand = vscode.commands.registerCommand('vibey.selectModel', async () => {
             try {
-                const models = await llm.listModels();
+                const config = vscode.workspace.getConfiguration('vibey');
+                const provider = config.get<string>('provider') || 'ollama';
+                
+                let models: string[] = [];
+                
+                if (provider === 'openai-compatible') {
+                    const openaiClient = new OpenAICompatibleClient();
+                    models = await openaiClient.listModels();
+                } else {
+                    const ollamaClient = new OllamaClient();
+                    models = await ollamaClient.listModels();
+                }
+                
                 if (models.length === 0) {
-                    vscode.window.showErrorMessage('No Ollama models found. Is Ollama running?');
+                    vscode.window.showErrorMessage('No models found. Is the server running?');
                     return;
                 }
 
                 const selected = await vscode.window.showQuickPick([...models, 'Clear Context'], {
-                    placeHolder: 'Select an Ollama model or action'
+                    placeHolder: 'Select a model or action'
                 });
 
                 if (selected === 'Clear Context') {
@@ -189,37 +212,81 @@ export function activate(context: vscode.ExtensionContext) {
 
         const diagnosticCommand = vscode.commands.registerCommand('vibey.diagnostics', async () => {
             const config = vscode.workspace.getConfiguration('vibey');
-            const ollamaUrl = config.get<string>('ollamaUrl') || 'http://localhost:11434';
+            const provider = config.get<string>('provider') || 'ollama';
             const model = config.get<string>('model') || 'Qwen3-coder:latest';
+            const baseUrl = provider === 'openai-compatible' 
+                ? config.get<string>('openaiBaseUrl') || 'http://localhost:11434/v1'
+                : config.get<string>('ollamaUrl') || 'http://localhost:11434';
 
             vscode.window.showInformationMessage('🔍 Running Vibey diagnostics...', { modal: true });
 
             try {
-                // Test Ollama connection
-                console.log('[VIBEY][Diagnostic] Testing Ollama connection...');
-                const healthResponse = await fetch(`${ollamaUrl}/api/tags`);
-                const isHealthy = healthResponse.ok;
+                // Test connection based on provider
+                console.log('[VIBEY][Diagnostic] Testing connection...');
+                let isHealthy = false;
+                let models = [];
+                
+                if (provider === 'openai-compatible') {
+                    const normalizedBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+                    const modelsEndpoint = `${normalizedBaseUrl}/models`;
+                    const response = await fetch(modelsEndpoint, {
+                        method: 'GET',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            ...(config.get<string>('openaiApiKey') ? {'Authorization': `Bearer ${config.get<string>('openaiApiKey')}`} : {})
+                        }
+                    });
+                    isHealthy = response.ok;
+                    
+                    if (isHealthy) {
+                        const data = await response.json() as {
+                            data: Array<{
+                                id: string;
+                                object: string;
+                                created: number;
+                            }>
+                        };
+                        models = data.data.map(m => m.id);
+                    }
+                } else {
+                    const response = await fetch(`${baseUrl}/api/tags`);
+                    isHealthy = response.ok;
+                    
+                    if (isHealthy) {
+                        const data = await response.json() as any;
+                        models = data.models || [];
+                    }
+                }
 
                 let diagnosticsText = `Vibey Diagnostics Report\n\n`;
-                diagnosticsText += `Ollama Settings:\n`;
-                diagnosticsText += `- URL: ${ollamaUrl}\n`;
+                diagnosticsText += `Provider Settings:\n`;
+                diagnosticsText += `- Provider: ${provider}\n`;
                 diagnosticsText += `- Model: ${model}\n`;
+                diagnosticsText += `- Endpoint: ${baseUrl}\n`;
                 diagnosticsText += `- Connection: ${isHealthy ? '✅ OK' : '❌ FAILED'}\n\n`;
 
                 if (isHealthy) {
-                    const data = await healthResponse.json() as any;
-                    const models = data.models || [];
-                    diagnosticsText += `Available Models (${models.length}):\n`;
+                    diagnosticsText += `Available Models (${models.length}):
+`;
                     models.forEach((m: any) => {
-                        const isCurrentModel = m.name === model;
-                        diagnosticsText += `${isCurrentModel ? '✓' : ' '} ${m.name}\n`;
+                        const isCurrentModel = m === model;
+                        diagnosticsText += `${isCurrentModel ? '✓' : ' '} ${m}\n`;
                     });
                 } else {
-                    diagnosticsText += `❌ Cannot reach Ollama server.\n`;
-                    diagnosticsText += `Make sure:\n`;
-                    diagnosticsText += `1. Run: ollama serve\n`;
-                    diagnosticsText += `2. Check URL is correct: ${ollamaUrl}\n`;
-                    diagnosticsText += `3. Check firewall/network\n`;
+                    if (provider === 'openai-compatible') {
+                        diagnosticsText += `❌ Cannot reach OpenAI-compatible endpoint.\n`;
+                        diagnosticsText += `Make sure:\n`;
+                        diagnosticsText += `1. Server is running at ${baseUrl}\n`;
+                        diagnosticsText += `2. Check URL is correct: vibey.openaiBaseUrl setting = ${baseUrl}\n`;
+                        diagnosticsText += `3. Check API key is correct if required\n`;
+                        diagnosticsText += `4. Check network connectivity\n`;
+                    } else {
+                        diagnosticsText += `❌ Cannot reach Ollama server.\n`;
+                        diagnosticsText += `Make sure:\n`;
+                        diagnosticsText += `1. Run: ollama serve\n`;
+                        diagnosticsText += `2. Check URL is correct: vibey.ollamaUrl setting = ${baseUrl}\n`;
+                        diagnosticsText += `3. Check firewall/network\n`;
+                    }
                 }
 
                 console.log('[VIBEY][Diagnostic] Diagnostics:\n' + diagnosticsText);
