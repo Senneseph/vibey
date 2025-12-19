@@ -13,12 +13,45 @@ export class ResponseFormatter {
      */
     static formatResponse(responseText: string, hasToolCalls: boolean = false): string {
         if (hasToolCalls) {
-            // If there are tool calls, return as-is (should be JSON)
-            return responseText;
+            // If there are tool calls, validate and sanitize the JSON before returning
+            try {
+                // Attempt to parse as JSON object (handles both fenced and inline JSON)
+                let parsed: any;
+                
+                // Check for fenced JSON block
+                const fencedMatch = responseText.match(/```json[\r\n]+([\s\S]*?)[\r\n]+```/);
+                if (fencedMatch) {
+                    parsed = JSON.parse(fencedMatch[1].trim());
+                } else {
+                    // Try to parse as inline JSON object
+                    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+                    if (jsonMatch) {
+                        parsed = JSON.parse(jsonMatch[0]);
+                    } else {
+                        throw new Error('No valid JSON found');
+                    }
+                }
+                
+                // Validate that it's a proper tool call structure
+                if (!parsed || typeof parsed !== 'object') {
+                    throw new Error('Invalid tool call structure');
+                }
+                
+                // Ensure it has at least one expected key (thought or tool_calls)
+                if (!('thought' in parsed) && !('tool_calls' in parsed)) {
+                    throw new Error('Missing required fields: thought or tool_calls');
+                }
+                
+                // Return the sanitized, validated JSON
+                return JSON.stringify(parsed, null, 2);
+            } catch (e) {
+                // If JSON is malformed, treat as plain text response
+                console.warn('Malformed tool call JSON detected, falling back to plain text:', e);
+                return responseText.replace(/```json[\r\n]+[\s\S]*?[\r\n]+```/g, '').trim();
+            }
         }
         
         // For plain text responses, ensure we don't return JSON blocks
-        // Remove any JSON block formatting if present
         const cleanText = responseText
             .replace(/```json\n/g, '')
             .replace(/```/g, '')

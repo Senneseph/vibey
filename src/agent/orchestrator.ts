@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { AgentContext, LLMProvider } from './types';
+import { AgentContext, LLMProvider, ChatMessage } from './types';
 import { ToolGateway } from '../tools/gateway';
 import { ToolCall, ToolDefinition } from '../tools/schema';
 import { ContextManager, ContextItem } from './context_manager';
@@ -124,7 +124,7 @@ When done, respond with plain text summarizing what you accomplished.
             console.log(`[VIBEY][Orchestrator] Context items: ${contextItems?.length || 0}`);
             
             const contextBlockStart = Date.now();
-            const contextBlock = contextItems && contextItems.length > 0
+            let contextBlock = contextItems && contextItems.length > 0
                 ? await getContextForTask(this.contextManager, userMessage, contextItems)
                 : '';
             const contextBlockTime = Date.now() - contextBlockStart;
@@ -144,21 +144,38 @@ When done, respond with plain text summarizing what you accomplished.
                 toolResults: 0,
                 total: systemPromptTokens + contextTokens + userMessageTokens
             };
-            
+
             console.log(`[VIBEY][Orchestrator] Token usage:`, tokenUsage);
             console.log(`[VIBEY][Orchestrator] ${this.tokenManager.formatTokenReport(tokenUsage)}`);
+
+            // Track per-message token usage
+            const messageTokens = userMessageTokens + contextTokens;
+            const perMessageReport = this.tokenManager.formatPerMessageTokenReport(messageTokens, tokenUsage.total);
+            console.log(`[VIBEY][Orchestrator] ${perMessageReport}`);
+
+            // Send per-message token usage to UI
+            if (onUpdate) {
+                onUpdate({
+                    type: 'perMessageTokens',
+                    messageTokens: messageTokens,
+                    currentTotal: tokenUsage.total,
+                    percentage: this.tokenManager.getUsagePercentage(tokenUsage.total),
+                    remaining: this.tokenManager.getRemainingTokens(tokenUsage.total),
+                    meter: this.tokenManager.createContextUsageMeter(tokenUsage.total)
+                });
+            }
             
             // Check if we're exceeding token limits
             if (this.tokenManager.isExceeded(tokenUsage.total)) {
                 console.warn(`[VIBEY][Orchestrator] ⚠️ WARNING: Total tokens (${tokenUsage.total}) exceeds limit (${this.tokenManager.getConfig().maxTokens})`);
-                
+                 
                 // Truncate context to fit within limits
                 const truncated = this.tokenManager.truncateContext(
                     contextBlock,
                     systemPromptTokens,
                     userMessageTokens
                 );
-                
+                 
                 if (truncated.wasExceeded) {
                     console.warn(`[VIBEY][Orchestrator] Context truncated - removed ${truncated.removedTokens} tokens`);
                     if (onUpdate) {
@@ -170,11 +187,69 @@ When done, respond with plain text summarizing what you accomplished.
                 }
             } else if (this.tokenManager.isApproachingLimit(tokenUsage.total)) {
                 console.warn(`[VIBEY][Orchestrator] ⚠️ Approaching token limit: ${tokenUsage.total}/${this.tokenManager.getConfig().maxTokens} tokens`);
-                if (onUpdate) {
-                    onUpdate({
-                        type: 'warning',
-                        message: `Approaching token limit (${this.tokenManager.getUsagePercentage(tokenUsage.total)}% used). Consider breaking into multiple turns.`
-                    });
+                
+                // Implement context condensation when approaching limit
+                const condensationThreshold = this.tokenManager.getConfig().maxTokens * 0.9; // 90% of limit
+                if (tokenUsage.total > condensationThreshold) {
+                    console.log(`[VIBEY][Orchestrator] 🔄 Initiating context condensation...`);
+                    
+                    // Create a summary of the current context for condensation
+                    const summaryPrompt = `Please create a concise but meaningful summary of the work done so far. Focus on:
+1. Key accomplishments
+2. Current state of the task
+3. Important findings or decisions
+4. Next steps needed
+
+Current context summary: ${contextBlock.substring(0, 2000)}...`;
+                    
+                    // Add this as a system message to get a summary
+                    const condensationMessages: ChatMessage[] = [
+                        { role: 'system', content: 'You are a helpful assistant that creates concise summaries.' },
+                        { role: 'user', content: summaryPrompt }
+                    ];
+                    
+                    try {
+                        const summaryResponse = await callLLM(this.llm, condensationMessages, signal);
+                        
+                        // Replace the current context with the summary
+                        const condensedContext = `## Context Summary (Condensed)
+
+${summaryResponse}
+
+---
+
+[Previous detailed context condensed to save tokens]`;
+                        
+                        console.log(`[VIBEY][Orchestrator] 📝 Context condensed from ${contextBlock.length} to ${condensedContext.length} characters`);
+                        
+                        if (onUpdate) {
+                            onUpdate({
+                                type: 'contextCondensed',
+                                originalSize: contextBlock.length,
+                                condensedSize: condensedContext.length,
+                                message: `Context condensed to save tokens. Summary created to preserve key information.`
+                            });
+                        }
+                        
+                        // Use the condensed context instead
+                        contextBlock = condensedContext;
+                        
+                    } catch (error) {
+                        console.error(`[VIBEY][Orchestrator] ❌ Context condensation failed:`, error);
+                        if (onUpdate) {
+                            onUpdate({
+                                type: 'warning',
+                                message: `Context condensation attempted but failed. Continuing with original context.`
+                            });
+                        }
+                    }
+                } else {
+                    if (onUpdate) {
+                        onUpdate({
+                            type: 'warning',
+                            message: `Approaching token limit (${this.tokenManager.getUsagePercentage(tokenUsage.total)}% used). Consider breaking into multiple turns.`
+                        });
+                    }
                 }
             } else {
                 console.log(`[VIBEY][Orchestrator] ✅ Token usage is healthy (${this.tokenManager.getUsagePercentage(tokenUsage.total)}% of limit)`);

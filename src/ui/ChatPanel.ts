@@ -17,6 +17,7 @@ export class ChatPanel implements vscode.WebviewViewProvider {
     private lastAgentUpdate: any = null;
     private agentUpdatesBuffer: any[] = [];
     private pendingAgentUpdates: any[] = [];  // Accumulate updates for current assistant response
+    private llmStreamUpdates: any[] = []; // Track LLM stream updates separately to avoid bloating chat history
 
     constructor(
         private readonly _extensionUri: vscode.Uri,
@@ -102,12 +103,13 @@ export class ChatPanel implements vscode.WebviewViewProvider {
                     if (this.webviewReady) {
                         this._view?.webview.postMessage({ type: 'addMessage', role: userMsg.role, content: userMsg.content });
                     }
-
+            
                     await this.historyManager.saveHistory(this.currentHistory);
-
+            
                     this.isGenerating = true;
                     this.agentUpdatesBuffer = []; // Clear buffer for new session
                     this.pendingAgentUpdates = []; // Clear pending updates for new response
+                    this.llmStreamUpdates = []; // Track LLM stream updates separately
 
                     // Call Agent with Context (Pass data.context)
                     let agentCancelled = false;
@@ -115,10 +117,20 @@ export class ChatPanel implements vscode.WebviewViewProvider {
                         // Track the agent process for reconnection
                         let updateCallback = (update: any) => {
                             this.lastAgentUpdate = update;
-                            // Buffer updates for session preservation
-                            this.agentUpdatesBuffer.push(update);
-                            // Accumulate updates for this response
-                            this.pendingAgentUpdates.push(update);
+                            
+                            // Separate LLM stream updates from regular agent updates
+                            const isLLMStreamUpdate = update.type === 'llmRequest' || update.type === 'llmError';
+                            
+                            if (!isLLMStreamUpdate) {
+                                // Buffer regular updates for session preservation
+                                this.agentUpdatesBuffer.push(update);
+                                // Accumulate updates for this response
+                                this.pendingAgentUpdates.push(update);
+                            } else {
+                                // Track LLM stream updates separately to avoid bloating chat history
+                                this.llmStreamUpdates.push(update);
+                            }
+                            
                             if (this.webviewReady) {
                                 this._view?.webview.postMessage({ type: 'agentUpdate', update });
                             }
@@ -362,6 +374,9 @@ export class ChatPanel implements vscode.WebviewViewProvider {
             </div>
 
             <div id="llm-stream-view" class="view">
+                <div class="llm-stream-controls">
+                    <button id="clear-llm-stream" class="icon-btn" title="Clear LLM Stream">🗑️</button>
+                </div>
                 <div id="llm-stream-container">
                     <!-- LLM stream updates will be rendered here -->
                     <div class="empty-state">LLM stream updates will appear here</div>

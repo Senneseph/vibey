@@ -7,7 +7,7 @@ import {
 } from './chat_manager.js';
 
 // DOM elements - lazy loaded
-let inputBox, sendBtn, attachBtn, settingsBtn, modelsBtn, contextArea;
+let inputBox, sendBtn, attachBtn, settingsBtn, modelsBtn, contextArea, clearLLMStreamBtn;
 
 function initializeEventElements() {
     inputBox = document.getElementById('InputBox');
@@ -16,6 +16,7 @@ function initializeEventElements() {
     settingsBtn = document.getElementById('settings-btn');
     modelsBtn = document.getElementById('models-btn');
     contextArea = document.getElementById('context-area');
+    clearLLMStreamBtn = document.getElementById('clear-llm-stream');
 
     // Send button
     if (sendBtn) sendBtn.addEventListener('click', handleSendClick);
@@ -51,6 +52,15 @@ function initializeEventElements() {
     if (settingsBtn) {
         settingsBtn.addEventListener('click', () => {
             vscode.postMessage({ type: 'openSettings' });
+        });
+    }
+
+    if (clearLLMStreamBtn) {
+        clearLLMStreamBtn.addEventListener('click', () => {
+            const streamContainer = document.getElementById('llm-stream-container');
+            if (streamContainer) {
+                streamContainer.innerHTML = '<div class="empty-state">LLM stream updates will appear here</div>';
+            }
         });
     }
 }

@@ -198,6 +198,34 @@ To continue: refer to previous findings but focus on next steps.`;
 
         return report;
     }
+
+    /**
+     * Create a visual meter for context usage
+     */
+    createContextUsageMeter(currentTokens: number, maxTokens: number = this.limits.maxTokens): string {
+        const percentage = this.getUsagePercentage(currentTokens);
+        const usedBlocks = Math.min(20, Math.floor(percentage / 5));
+        const emptyBlocks = Math.max(0, 20 - usedBlocks);
+        const status = this.isExceeded(currentTokens) ? '❌ EXCEEDED' : this.isApproachingLimit(currentTokens) ? '⚠️ WARNING' : '✅ OK';
+
+        return `📊 Context Usage Meter: [${'█'.repeat(usedBlocks)}${'░'.repeat(emptyBlocks)}] ${percentage}% (${currentTokens}/${maxTokens} tokens) ${status}`;
+    }
+
+    /**
+     * Create a per-message token usage report
+     */
+    formatPerMessageTokenReport(messageTokens: number, currentTotal: number): string {
+        const percentage = this.getUsagePercentage(currentTotal);
+        const remaining = this.getRemainingTokens(currentTotal);
+        const status = this.isExceeded(currentTotal) ? '❌ EXCEEDED' : this.isApproachingLimit(currentTotal) ? '⚠️ WARNING' : '✅ OK';
+
+        return `📊 Per-Message Token Usage:
+- This message: ${messageTokens} tokens
+- Current total: ${currentTotal} tokens
+- Usage: ${percentage}%
+- Remaining: ${remaining} tokens
+- Status: ${status}`;
+    }
 }
 
 export function getTokenManager(): TokenManager {

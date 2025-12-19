@@ -205,6 +205,9 @@ body.theme-light {
     border-radius: 4px;
     font-style: normal;
     margin-top: 4px;
+    width: 100%;
+    word-wrap: break-word;
+    white-space: pre-wrap;
 }
 
 /* Tool Calls (Unified) */
@@ -417,6 +420,26 @@ body.theme-light {
     margin-bottom: 4px;
 }
 
+/* LLM Stream */
+#llm-stream-view {
+    display: flex;
+    flex-direction: column;
+}
+
+.llm-stream-controls {
+    padding: 8px 10px;
+    background: var(--vscode-sideBar-background);
+    border-bottom: 1px solid var(--vscode-panel-border);
+    display: flex;
+    justify-content: flex-end;
+}
+
+#llm-stream-container {
+    padding: 10px;
+    overflow-y: auto;
+    flex: 1;
+}
+
 /* Task List */
 #task-list {
     padding: 10px;
@@ -614,4 +637,50 @@ body.theme-light {
 
 .scroll-to-bottom-btn:active {
     transform: scale(0.95);
+}
+
+/* Token usage meter styling */
+.token-meter {
+    font-family: monospace;
+    font-size: 0.85em;
+    margin: 5px 0;
+    padding: 2px 0;
+    white-space: pre;
+}
+
+.token-meter-full {
+    color: var(--vscode-errorForeground);
+}
+
+.token-meter-warning {
+    color: var(--vscode-notificationWarningIcon-foreground);
+}
+
+.token-meter-ok {
+    color: var(--vscode-testing-iconPassed);
+}
+
+/* Per-message token usage styling */
+.per-message-tokens {
+    background: var(--vscode-textBlockQuote-background);
+    border-left: 3px solid var(--vscode-notificationsInfoIcon-foreground);
+    padding: 8px 12px;
+    margin: 8px 0;
+    border-radius: 4px;
+}
+
+.per-message-tokens strong {
+    color: var(--vscode-notificationsInfoIcon-foreground);
+}
+
+.context-condensed {
+    background: var(--vscode-textBlockQuote-background);
+    border-left: 3px solid var(--vscode-testing-iconPassed);
+    padding: 8px 12px;
+    margin: 8px 0;
+    border-radius: 4px;
+}
+
+.context-condensed strong {
+    color: var(--vscode-testing-iconPassed);
 }

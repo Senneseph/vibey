@@ -216,6 +216,33 @@ function handleAgentUpdate(update) {
             // Display token usage information
             div.innerHTML = `<strong>📊 Token Usage:</strong> ${update.sent} sent, ${update.received} received`;
             break;
+        case 'perMessageTokens':
+            // Display per-message token usage with meter
+            div.className = 'message system-update per-message-tokens';
+            div.innerHTML = `
+                <strong>📊 Per-Message Token Usage:</strong>
+                <div style="margin-top: 5px; font-size: 0.9em;">
+                    This message: ${update.messageTokens} tokens<br>
+                    Current total: ${update.currentTotal} tokens (${update.percentage}%)<br>
+                    Remaining: ${update.remaining} tokens
+                </div>
+                <div class="token-meter">
+                    ${update.meter}
+                </div>
+            `;
+            break;
+        case 'contextCondensed':
+            // Display context condensation information
+            div.className = 'message system-update context-condensed';
+            div.innerHTML = `
+                <strong>🔄 Context Condensed:</strong>
+                <div style="margin-top: 5px; font-size: 0.9em;">
+                    ${update.message}<br>
+                    Original: ${update.originalSize} characters<br>
+                    Condensed: ${update.condensedSize} characters
+                </div>
+            `;
+            break;
         case 'llmRequest':
             // Display LLM request details with message preview in LLM Stream tab
             const payload = update.payload || {};
@@ -232,6 +259,15 @@ function handleAgentUpdate(update) {
                 // Check if there's an existing llmRequest panel to update
                 let messagePreviews = '';
                 const existingRequest = streamContainer.querySelector('[data-message-type="llmRequest"]');
+                
+                // Implement log rotation - keep only last 50 updates
+                const updates = streamContainer.querySelectorAll('.message.system-update');
+                if (updates.length >= 50) {
+                    // Remove oldest updates
+                    for (let i = 0; i < updates.length - 49; i++) {
+                        streamContainer.removeChild(updates[i]);
+                    }
+                }
                 
                 if (payload.messages) {
                     const systemMsg = payload.messages.find(m => m.role === 'system');
@@ -298,6 +334,16 @@ function handleAgentUpdate(update) {
             const llmStreamContainer = document.getElementById('llm-stream-container');
             if (llmStreamContainer) {
                 llmStreamContainer.appendChild(errorDiv);
+                
+                // Implement log rotation for errors too
+                const updates = llmStreamContainer.querySelectorAll('.message.system-update');
+                if (updates.length > 50) {
+                    // Remove oldest updates
+                    for (let i = 0; i < updates.length - 50; i++) {
+                        llmStreamContainer.removeChild(updates[i]);
+                    }
+                }
+                
                 llmStreamContainer.scrollTop = llmStreamContainer.scrollHeight;
             }
             return;
