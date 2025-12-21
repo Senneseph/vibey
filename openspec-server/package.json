@@ -1,0 +1,23 @@
+{
+  "name": "openspec-server",
+  "version": "1.0.0",
+  "description": "OpenSpec MCP Server for Vibey",
+  "main": "build/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc && node -e \"require('fs').chmodSync('build/index.js', '755')\"",
+    "start": "node build/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.24.3",
+    "axios": "^1.6.2",
+    "zod": "^3.22.4",
+    "fs-extra": "^11.2.0",
+    "path": "^0.12.7"
+  },
+  "devDependencies": {
+    "@types/fs-extra": "^11.0.4",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.3.3"
+  }
+}

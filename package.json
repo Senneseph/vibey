@@ -3,7 +3,7 @@
     "displayName": "Vibey",
     "description": "Offline-first AI Coding Agent",
     "publisher": "vibey-project",
-    "version": "0.5.6",
+    "version": "0.5.7",
     "icon": "icon.png",
     "repository": {
         "type": "git",
@@ -55,7 +55,6 @@
                     "default": false,
                     "description": "If true, non-critical tools will run without approval (Use with caution)"
                 },
-                
                 "vibey.mcpServers": {
                     "type": "object",
                     "default": {},
@@ -93,7 +92,14 @@
                 "vibey.maxContextTokens": {
                     "type": "number",
                     "default": 32768,
-                    "enum": [8192, 16384, 32768, 65536, 131072, 262144],
+                    "enum": [
+                        8192,
+                        16384,
+                        32768,
+                        65536,
+                        131072,
+                        262144
+                    ],
                     "description": "Maximum context window size in tokens. Smaller = faster but less context (8k=limited, 32k=balanced, 256k=full). Adjust based on your system memory."
                 },
                 "vibey.ollamaRequestTimeout": {
@@ -190,21 +196,31 @@
         "esbuild-watch": "npm run esbuild-base -- --sourcemap --watch",
         "compile": "tsc -p ./",
         "watch": "tsc -watch -p ./",
-        "pretest": "npm run compile && npm run lint",
+        "pretest": "npm run compile",
         "lint": "eslint src --ext ts",
-        "test": "node ./out/test/runTest.js",
+        "test": "jest",
+        "test:watch": "jest --watch",
+        "test:coverage": "jest --coverage",
         "package": "vsce package"
     },
     "devDependencies": {
+        "@types/fs-extra": "^11.0.4",
         "@types/glob": "^8.1.0",
+        "@types/jest": "^29.5.0",
         "@types/node": "20.x",
         "@types/vscode": "^1.90.0",
+        "@typescript-eslint/eslint-plugin": "^6.21.0",
+        "@typescript-eslint/parser": "^6.21.0",
         "esbuild": "^0.27.1",
         "eslint": "^8.57.0",
+        "fast-check": "^3.15.0",
+        "jest": "^29.5.0",
+        "ts-jest": "^29.1.0",
         "typescript": "^5.4.5"
     },
     "dependencies": {
         "@modelcontextprotocol/sdk": "^1.24.3",
+        "fs-extra": "^11.2.0",
         "zod": "^3.23.8"
     }
 }

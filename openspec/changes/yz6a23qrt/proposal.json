@@ -1,0 +1,18 @@
+{
+  "id": "yz6a23qrt",
+  "title": "hasOwnProp",
+  "description": "hasOwnProp",
+  "specDeltas": [
+    {
+      "operation": "create",
+      "path": "feature/spec.md",
+      "content": "# Feature Specification\n\n## Overview\nThis specification defines the requirements and implementation details for the requested feature.\n\n## Requirements\n\n## Acceptance Criteria\n\n"
+    }
+  ],
+  "tasks": [],
+  "estimatedEffort": "Small (1-2 days)",
+  "dependencies": [],
+  "status": "draft",
+  "createdAt": "2025-12-21T19:58:59.907Z",
+  "updatedAt": "2025-12-21T19:58:59.907Z"
+}

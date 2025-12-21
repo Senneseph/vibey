@@ -347,7 +347,8 @@ export class ChatPanel implements vscode.WebviewViewProvider {
                 <div class="tab" data-tab="llm-stream">LLM Stream</div>
             </div>
 
-            <div id="chat-view" class="view active">
+            <div class="views-container">
+                <div id="chat-view" class="view active">
                 <div id="chat-container"></div>
 
                 <div id="input-area">
@@ -382,8 +383,9 @@ export class ChatPanel implements vscode.WebviewViewProvider {
                     <div class="empty-state">LLM stream updates will appear here</div>
                 </div>
             </div>
+        </div>
 
-            <script type="module" src="${scriptUri}"></script>
+        <script type="module" src="${scriptUri}"></script>
         </body>
         </html>`;
     }

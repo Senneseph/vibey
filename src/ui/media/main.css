@@ -110,16 +110,29 @@ body.theme-light {
     font-weight: bold;
 }
 
+/* Views Container */
+.views-container {
+    position: relative;
+    flex: 1;
+    overflow: hidden;
+}
+
 /* Views */
 .view {
     display: none;
-    flex: 1;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
     flex-direction: column;
     overflow: hidden;
+    background-color: var(--vscode-editor-background);
 }
 
 .view.active {
     display: flex;
+    position: relative;
 }
 
 #chat-container {

@@ -1,0 +1,9 @@
+{
+  "vibey.mcpServers": {
+    "openspec": {
+      "command": "node",
+      "args": ["./openspec-server/build/index.js"],
+      "env": {}
+    }
+  }
+}
