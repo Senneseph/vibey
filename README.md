@@ -17,7 +17,7 @@
 - **Persistent Memory**: Chat history and task state are preserved across sessions.
 
 ## Getting Started
-1. **Install Ollama**: Ensure [https://ollama.com/](Ollama) is installed and running.
+1. **Install Ollama**: Ensure [Ollama](https://ollama.com/) is installed and running.
 1. **Pull a Model**: Run ollama pull qwen3-coder (or your preferred model).
 1. **Select Model**: Use the command `Vibey: Select Model` to choose your LLM. Or click the cog icon in the top of the Vibey Chat pane.
 1. **Start Chatting**: Open the Vibey sidebar and ask away!
