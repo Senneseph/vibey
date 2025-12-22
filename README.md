@@ -1,6 +1,6 @@
 # Vibey: AI Coding Agent
 
-Vibey is an advanced, offline-first AI coding agent for VS Code. It orchestrates local LLMs (via Ollama) and a suite of powerful tools to help you build, debug, and understand code autonomously.
+**Vibey** is an advanced, offline-first AI coding agent for VS Code. It orchestrates local LLMs (via Ollama) and a suite of powerful tools to help you build, debug, and understand code autonomously.
 
 ## Features
 - **Offline-First Intelligence**: Powered by local LLMs (Ollama), keeping your code private.
@@ -17,7 +17,7 @@ Vibey is an advanced, offline-first AI coding agent for VS Code. It orchestrates
 - **Persistent Memory**: Chat history and task state are preserved across sessions.
 
 ## Getting Started
-1. **Install Ollama**: Ensure Ollama is installed and running.
+1. **Install Ollama**: Ensure [https://ollama.com/](Ollama) is installed and running.
 1. **Pull a Model**: Run ollama pull qwen3-coder (or your preferred model).
 1. **Select Model**: Use the command `Vibey: Select Model` to choose your LLM. Or click the cog icon in the top of the Vibey Chat pane.
 1. **Start Chatting**: Open the Vibey sidebar and ask away!
