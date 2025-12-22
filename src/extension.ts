@@ -12,7 +12,6 @@ import { createPatchTools } from './tools/definitions/patch';
 import { createManageTaskTool } from './tools/definitions/tasks';
 import { TaskManager } from './agent/task_manager';
 import { ChatPanel } from './ui/ChatPanel';
-import { MicPanel } from './ui/MicPanel';
 
 import { VibeyTerminalManager } from './agent/terminal';
 import { createTerminalTools } from './tools/definitions/terminal';
@@ -22,6 +21,7 @@ import { McpService } from './agent/mcp/mcp_service';
 import { MetricsCollector } from './agent/metrics/metrics_collector';
 import { createSearchTools } from './tools/definitions/search';
 import { ContextManager } from './agent/context_manager';
+import { FeatureTestRunner, FeatureTestReport } from './agent/testing/test_runner';
 
 // Module-level references for cleanup
 let mcpService: McpService | undefined;
@@ -90,6 +90,9 @@ export function activate(context: vscode.ExtensionContext) {
         const orchestrator = new AgentOrchestrator(llm, gateway, workspaceRoot);
 
         const historyManager = new DailyHistoryManager(context, workspaceRoot);
+        
+        // Initialize feature test runner
+        const featureTestRunner = new FeatureTestRunner(orchestrator, gateway, mcpService, workspaceRoot);
 
         // Export metrics collector for use in LLM provider
         const vibeyExtension = vscode.extensions.getExtension('vibey.vibey');
@@ -156,13 +159,6 @@ export function activate(context: vscode.ExtensionContext) {
             }
         });
 
-        // Voice Input Command - opens a WebviewPanel for microphone access
-        const voiceInputCommand = vscode.commands.registerCommand('vibey.voiceInput', () => {
-            MicPanel.createOrShow(context.extensionUri, (transcript: string) => {
-                // Send transcript to the chat panel
-                chatProvider.addTranscriptToInput(transcript);
-            });
-        });
 
         // MCP Commands
         const mcpStatusCommand = vscode.commands.registerCommand('vibey.mcpStatus', () => {
@@ -316,15 +312,48 @@ export function activate(context: vscode.ExtensionContext) {
             }
         });
 
+        const featureTestCommand = vscode.commands.registerCommand('vibey.runFeatureTests', async () => {
+            try {
+                vscode.window.showInformationMessage('🧪 Running Vibey feature tests...', { modal: true });
+                
+                const report = await featureTestRunner.runAllTests();
+                
+                // Show summary notification
+                const successRate = report.summary.successRate;
+                const message = successRate === 100
+                    ? '✅ All tests passed! Vibey is working correctly.'
+                    : `📊 Tests completed: ${report.summary.passedTests}/${report.summary.totalTests} passed (${successRate.toFixed(1)}%)`;
+                
+                vscode.window.showInformationMessage(message);
+                
+                // Show detailed report
+                const troubleshootingReport = featureTestRunner.generateTroubleshootingReport(report);
+                
+                // Create a webview to show the detailed report
+                const panel = vscode.window.createWebviewPanel(
+                    'vibeyFeatureTestResults',
+                    'Vibey Feature Test Results',
+                    vscode.ViewColumn.One,
+                    {}
+                );
+                
+                panel.webview.html = getFeatureTestReportHtml(panel.webview, troubleshootingReport, report);
+                
+            } catch (error: any) {
+                console.error('[VIBEY][FeatureTest] Error running tests:', error);
+                vscode.window.showErrorMessage(`Feature tests failed: ${error.message}`);
+            }
+        });
+
         context.subscriptions.push(startCommand);
         context.subscriptions.push(settingsCommand);
         context.subscriptions.push(selectModelCommand);
-        context.subscriptions.push(voiceInputCommand);
         context.subscriptions.push(mcpStatusCommand);
         context.subscriptions.push(mcpReloadCommand);
         context.subscriptions.push(mcpListToolsCommand);
         context.subscriptions.push(diagnosticCommand);
         context.subscriptions.push(clearHistoryCommand);
+        context.subscriptions.push(featureTestCommand);
 
         console.log('[VIBEY][activate] Extension activated successfully!');
     } catch (error: any) {
@@ -340,6 +369,202 @@ export function activate(context: vscode.ExtensionContext) {
 
 export function getMetricsCollector(): MetricsCollector | undefined {
     return metricsCollector;
+}
+
+function getFeatureTestReportHtml(webview: vscode.Webview, troubleshootingReport: string, report: FeatureTestReport): string {
+    const successRate = report.summary.successRate;
+    const successColor = successRate === 100 ? '#4CAF50' : successRate >= 75 ? '#FFC107' : '#F44336';
+    
+    // Convert markdown to HTML
+    const markdownToHtml = (markdown: string): string => {
+        return markdown
+            .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+            .replace(/`([^`]+)`/g, '<code>$1</code>')
+            .replace(/## ([^\n]+)/g, '<h2>$1</h2>')
+            .replace(/### ([^\n]+)/g, '<h3>$1</h3>')
+            .replace(/\n\n/g, '</p><p>')
+            .replace(/\n/g, '<br>');
+    };
+    
+    const troubleshootingHtml = markdownToHtml(troubleshootingReport);
+    
+    return `<!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Vibey Feature Test Results</title>
+        <style>
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                line-height: 1.6;
+                color: #333;
+                max-width: 800px;
+                margin: 0 auto;
+                padding: 20px;
+                background-color: #f5f5f5;
+            }
+            
+            h1, h2, h3 {
+                color: #2c3e50;
+            }
+            
+            .header {
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                padding: 30px;
+                border-radius: 10px;
+                margin-bottom: 30px;
+                text-align: center;
+            }
+            
+            .summary-card {
+                background: white;
+                border-radius: 10px;
+                padding: 20px;
+                margin-bottom: 20px;
+                box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            }
+            
+            .success-rate {
+                font-size: 2em;
+                font-weight: bold;
+                color: ${successColor};
+                text-align: center;
+                margin: 20px 0;
+            }
+            
+            .test-results {
+                background: white;
+                border-radius: 10px;
+                padding: 20px;
+                margin-bottom: 20px;
+                box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            }
+            
+            .test-feature {
+                margin-bottom: 15px;
+                padding-bottom: 15px;
+                border-bottom: 1px solid #eee;
+            }
+            
+            .test-feature:last-child {
+                border-bottom: none;
+            }
+            
+            .test-passed {
+                color: #4CAF50;
+                font-weight: bold;
+            }
+            
+            .test-failed {
+                color: #F44336;
+                font-weight: bold;
+            }
+            
+            .troubleshooting {
+                background: white;
+                border-radius: 10px;
+                padding: 20px;
+                box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            }
+            
+            code {
+                background: #f5f5f5;
+                padding: 2px 6px;
+                border-radius: 4px;
+                font-family: 'Courier New', monospace;
+            }
+            
+            strong {
+                color: #2c3e50;
+            }
+            
+            em {
+                color: #7f8c8d;
+            }
+            
+            .stats-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+                gap: 15px;
+                margin: 20px 0;
+            }
+            
+            .stat-card {
+                background: #f8f9fa;
+                padding: 15px;
+                border-radius: 8px;
+                text-align: center;
+            }
+            
+            .stat-value {
+                font-size: 1.5em;
+                font-weight: bold;
+                color: #667eea;
+            }
+            
+            .stat-label {
+                font-size: 0.9em;
+                color: #7f8c8d;
+                margin-top: 5px;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>🧪 Vibey Feature Test Results</h1>
+            <p>LLM Provider: ${report.llmProvider} | Model: ${report.llmModel}</p>
+        </div>
+        
+        <div class="summary-card">
+            <h2>📊 Test Summary</h2>
+            <div class="success-rate">
+                Success Rate: ${successRate.toFixed(1)}%
+            </div>
+            
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value">${report.summary.totalTests}</div>
+                    <div class="stat-label">Total Tests</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" style="color: #4CAF50;">${report.summary.passedTests}</div>
+                    <div class="stat-label">Passed</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" style="color: #F44336;">${report.summary.failedTests}</div>
+                    <div class="stat-label">Failed</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="test-results">
+        <h2>📋 Detailed Test Results</h2>
+        ${report.results.map((result: any) => `
+            <div class="test-feature">
+                <h3>${result.feature}</h3>
+                <p><strong>${result.testName}:</strong>
+                <span class="${result.success ? 'test-passed' : 'test-failed'}">
+                ${result.success ? '✅ PASSED' : '❌ FAILED'}
+                </span></p>
+                <p>${result.message}</p>
+                ${result.details ? `<pre><code>${JSON.stringify(result.details, null, 2)}</code></pre>` : ''}
+            </div>
+        `).join('')}
+    </div>
+        
+        <div class="troubleshooting">
+            <h2>🔧 Troubleshooting Recommendations</h2>
+            <div>${troubleshootingHtml}</div>
+        </div>
+        
+        <div style="text-align: center; margin-top: 30px; color: #7f8c8d; font-size: 0.9em;">
+            Generated on ${new Date(report.timestamp).toLocaleString()}
+        </div>
+    </body>
+    </html>`;
 }
 
 export async function deactivate() {

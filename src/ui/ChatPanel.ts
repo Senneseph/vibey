@@ -233,6 +233,11 @@ export class ChatPanel implements vscode.WebviewViewProvider {
                     }
                     break;
                 }
+                
+                case 'runFeatureTests': {
+                    vscode.commands.executeCommand('vibey.runFeatureTests');
+                    break;
+                }
 
 
                 case 'stopRequest': {
@@ -360,6 +365,7 @@ export class ChatPanel implements vscode.WebviewViewProvider {
                                 <button id="attach-btn" class="icon-btn" title="Add Context">📎</button>
                                 <button id="models-btn" class="icon-btn" title="Select Model">🤖</button>
                                 <button id="settings-btn" class="icon-btn" title="Settings">⚙️</button>
+                                <button id="test-btn" class="icon-btn" title="Run Feature Tests">🧪</button>
                             </div>
                             <button id="send-btn">Send ➤</button>
                         </div>

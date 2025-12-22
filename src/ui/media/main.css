@@ -114,25 +114,7 @@ body.theme-light {
 .views-container {
     position: relative;
     flex: 1;
-    overflow: hidden;
-}
-
-/* Views */
-.view {
-    display: none;
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    flex-direction: column;
-    overflow: hidden;
-    background-color: var(--vscode-editor-background);
-}
-
-.view.active {
-    display: flex;
-    position: relative;
+    overflow-y: scroll;
 }
 
 #chat-container {
@@ -435,8 +417,55 @@ body.theme-light {
 
 /* LLM Stream */
 #llm-stream-view {
-    display: flex;
+    display: none;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
     flex-direction: column;
+    overflow: hidden;
+    background-color: var(--vscode-editor-background);
+}
+
+#llm-stream-view.active {
+    display: flex;
+    position: relative;
+}
+
+/* Chat View */
+#chat-view {
+    display: none;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    flex-direction: column;
+    background-color: var(--vscode-editor-background);
+}
+
+#chat-view.active {
+    display: flex;
+    position: relative;
+}
+
+/* Tasks View */
+#tasks-view {
+    display: none;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    flex-direction: column;
+    overflow: hidden;
+    background-color: var(--vscode-editor-background);
+}
+
+#tasks-view.active {
+    display: flex;
+    position: relative;
 }
 
 .llm-stream-controls {

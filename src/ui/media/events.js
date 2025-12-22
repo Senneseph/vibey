@@ -55,6 +55,13 @@ function initializeEventElements() {
         });
     }
 
+    const testBtn = document.getElementById('test-btn');
+    if (testBtn) {
+        testBtn.addEventListener('click', () => {
+            vscode.postMessage({ type: 'runFeatureTests' });
+        });
+    }
+
     if (clearLLMStreamBtn) {
         clearLLMStreamBtn.addEventListener('click', () => {
             const streamContainer = document.getElementById('llm-stream-container');

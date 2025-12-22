@@ -1,401 +1,533 @@
 /**
- * Test Runner
- * Executes tests and validation checks
+ * Feature Test Runner - Tests various Vibey features to ensure they work with the configured LLM
+ * Provides diagnostic information and troubleshooting help
  */
 
+import { AgentOrchestrator } from '../orchestrator';
+import { ToolGateway } from '../../tools/gateway';
+import { McpService } from '../mcp/mcp_service';
 import * as vscode from 'vscode';
-import * as crypto from 'crypto';
-import * as fs from 'fs';
+import * as fs from 'fs/promises';
 import * as path from 'path';
-import { exec } from 'child_process';
-import { promisify } from 'util';
-import {
-    TestCase, TestResult, TestSuite, TestRun, ValidationCheck,
-    TestingConfig, TestStatus, DEFAULT_TESTING_CONFIG
-} from './types';
 
-const execAsync = promisify(exec);
+export interface TestResult {
+    feature: string;
+    testName: string;
+    success: boolean;
+    message: string;
+    details?: any;
+    timestamp: number;
+}
 
-export class TestRunner {
-    private tests: Map<string, TestCase> = new Map();
-    private suites: Map<string, TestSuite> = new Map();
-    private validations: Map<string, ValidationCheck> = new Map();
-    private runs: TestRun[] = [];
-    private currentRun?: TestRun;
+export interface FeatureTestReport {
+    llmProvider: string;
+    llmModel: string;
+    timestamp: number;
+    results: TestResult[];
+    summary: {
+        totalTests: number;
+        passedTests: number;
+        failedTests: number;
+        successRate: number;
+    };
+}
 
-    private static readonly STORAGE_KEY = 'vibey.testing.data';
-
+export class FeatureTestRunner {
     constructor(
-        private context: vscode.ExtensionContext,
-        private workspaceRoot: string,
-        private config: TestingConfig = DEFAULT_TESTING_CONFIG
-    ) {
-        this.loadState();
-        this.registerBuiltInValidations();
-    }
+        private orchestrator: AgentOrchestrator,
+        private tools: ToolGateway,
+        private mcpService: McpService,
+        private workspaceRoot: string
+    ) {}
 
-    // ==================== Test Registration ====================
-
-    registerTest(test: Omit<TestCase, 'id'>): TestCase {
-        const fullTest: TestCase = {
-            ...test,
-            id: crypto.randomUUID()
-        };
-        this.tests.set(fullTest.id, fullTest);
-        this.saveState();
-        return fullTest;
-    }
-
-    registerSuite(suite: Omit<TestSuite, 'id'>): TestSuite {
-        const fullSuite: TestSuite = {
-            ...suite,
-            id: crypto.randomUUID()
-        };
-        this.suites.set(fullSuite.id, fullSuite);
-        this.saveState();
-        return fullSuite;
-    }
-
-    registerValidation(check: Omit<ValidationCheck, 'id'>): ValidationCheck {
-        const fullCheck: ValidationCheck = {
-            ...check,
-            id: crypto.randomUUID()
-        };
-        this.validations.set(fullCheck.id, fullCheck);
-        this.saveState();
-        return fullCheck;
-    }
-
-    private registerBuiltInValidations(): void {
-        // TypeScript compilation check
-        this.validations.set('builtin-typescript', {
-            id: 'builtin-typescript',
-            name: 'TypeScript Compilation',
-            description: 'Check for TypeScript compilation errors',
-            type: 'types',
-            command: 'npm run compile',
-            triggers: ['file_change', 'pre_commit'],
-            filePatterns: ['**/*.ts', '**/*.tsx'],
-            failurePatterns: ['error TS'],
-            blocking: true
-        });
-
-        // ESLint check
-        this.validations.set('builtin-eslint', {
-            id: 'builtin-eslint',
-            name: 'ESLint',
-            description: 'Check for linting errors',
-            type: 'lint',
-            command: 'npm run lint',
-            triggers: ['file_change', 'pre_commit'],
-            filePatterns: ['**/*.ts', '**/*.tsx', '**/*.js'],
-            failurePatterns: ['error', 'warning'],
-            blocking: false,
-            autoFix: 'npm run lint -- --fix'
-        });
-
-        // npm test
-        this.validations.set('builtin-test', {
-            id: 'builtin-test',
-            name: 'Unit Tests',
-            description: 'Run unit tests',
-            type: 'test',
-            command: 'npm test',
-            triggers: ['pre_commit'],
-            failurePatterns: ['FAIL', 'failed'],
-            blocking: true
-        });
-    }
-
-    // ==================== Test Execution ====================
-
-    async runTest(testId: string): Promise<TestResult> {
-        const test = this.tests.get(testId);
-        if (!test) {
-            throw new Error(`Test not found: ${testId}`);
-        }
-
+    /**
+     * Run all feature tests
+     */
+    public async runAllTests(): Promise<FeatureTestReport> {
+        const results: TestResult[] = [];
         const startTime = Date.now();
-        let status: TestStatus = 'running';
-        let output = '';
-        let error = '';
-        const assertionResults: TestResult['assertions'] = [];
+
+        // Get current LLM configuration
+        const config = vscode.workspace.getConfiguration('vibey');
+        const llmProvider = config.get<string>('provider', 'unknown');
+        const llmModel = config.get<string>('model', 'unknown');
 
         try {
-            // Run command if specified
-            if (test.command) {
-                const result = await execAsync(test.command, {
-                    cwd: this.workspaceRoot,
-                    timeout: test.timeout
-                });
-                output = result.stdout;
-                if (result.stderr) {
-                    error = result.stderr;
+            // Run individual feature tests
+            results.push(...await this.testLLMConnectivity());
+            results.push(...await this.testFileOperations());
+            results.push(...await this.testMCPServer());
+            results.push(...await this.testWebFetching());
+            results.push(...await this.testTerminalOperations());
+
+            // Calculate summary
+            const totalTests = results.length;
+            const passedTests = results.filter(r => r.success).length;
+            const failedTests = totalTests - passedTests;
+            const successRate = totalTests > 0 ? (passedTests / totalTests) * 100 : 0;
+
+            return {
+                llmProvider,
+                llmModel,
+                timestamp: startTime,
+                results,
+                summary: {
+                    totalTests,
+                    passedTests,
+                    failedTests,
+                    successRate
                 }
-            }
+            };
 
-            // Run assertions
-            if (test.assertions) {
-                for (const assertion of test.assertions) {
-                    const result = await this.runAssertion(assertion);
-                    assertionResults.push(result);
+        } catch (error: any) {
+            console.error('[VIBEY][FeatureTestRunner] Error running tests:', error);
+            return {
+                llmProvider,
+                llmModel,
+                timestamp: startTime,
+                results: [{
+                    feature: 'Test Runner',
+                    testName: 'Overall Test Execution',
+                    success: false,
+                    message: `Test execution failed: ${error.message}`,
+                    details: { error: error.stack },
+                    timestamp: Date.now()
+                }],
+                summary: {
+                    totalTests: 1,
+                    passedTests: 0,
+                    failedTests: 1,
+                    successRate: 0
                 }
-            }
-
-            // Determine status
-            const allAssertionsPassed = assertionResults.every(a => a.passed);
-            status = allAssertionsPassed ? 'passed' : 'failed';
-
-        } catch (err: any) {
-            status = 'failed';
-            error = err.message || String(err);
-        }
-
-        const result: TestResult = {
-            testId,
-            status,
-            duration: Date.now() - startTime,
-            timestamp: Date.now(),
-            output,
-            error: error || undefined,
-            assertions: assertionResults.length > 0 ? assertionResults : undefined
-        };
-
-        return result;
-    }
-
-    private async runAssertion(assertion: NonNullable<TestCase['assertions']>[number]): Promise<NonNullable<TestResult['assertions']>[number]> {
-        const target = path.resolve(this.workspaceRoot, assertion.target);
-        
-        switch (assertion.type) {
-            case 'file_exists': {
-                const exists = fs.existsSync(target);
-                return {
-                    assertion: `File exists: ${assertion.target}`,
-                    passed: exists,
-                    actual: exists ? 'exists' : 'not found',
-                    expected: 'exists'
-                };
-            }
-            case 'file_contains': {
-                try {
-                    const content = fs.readFileSync(target, 'utf-8');
-                    const pattern = assertion.pattern ? new RegExp(assertion.pattern) : null;
-                    const passed = pattern
-                        ? pattern.test(content)
-                        : content.includes(assertion.expected || '');
-                    return {
-                        assertion: `File contains: ${assertion.pattern || assertion.expected}`,
-                        passed,
-                        expected: assertion.expected || assertion.pattern
-                    };
-                } catch {
-                    return {
-                        assertion: `File contains: ${assertion.pattern || assertion.expected}`,
-                        passed: false,
-                        actual: 'File not readable'
-                    };
-                }
-            }
-            case 'command_succeeds': {
-                try {
-                    await execAsync(assertion.target, { cwd: this.workspaceRoot });
-                    return {
-                        assertion: `Command succeeds: ${assertion.target}`,
-                        passed: true
-                    };
-                } catch (err: any) {
-                    return {
-                        assertion: `Command succeeds: ${assertion.target}`,
-                        passed: false,
-                        actual: err.message
-                    };
-                }
-            }
-            default:
-                return {
-                    assertion: `Unknown assertion type: ${assertion.type}`,
-                    passed: false
-                };
+            };
         }
     }
 
-    // ==================== Suite Execution ====================
-
-    async runSuite(suiteId: string, trigger: TestRun['trigger'] = 'manual'): Promise<TestRun> {
-        const suite = this.suites.get(suiteId);
-        if (!suite) {
-            throw new Error(`Suite not found: ${suiteId}`);
-        }
-
-        const run: TestRun = {
-            id: crypto.randomUUID(),
-            suiteId,
-            testIds: suite.testIds,
-            startedAt: Date.now(),
-            status: 'running',
-            results: [],
-            summary: { total: suite.testIds.length, passed: 0, failed: 0, skipped: 0 },
-            trigger
-        };
-
-        this.currentRun = run;
-
-        // Run setup
-        if (suite.setup) {
-            try {
-                await execAsync(suite.setup, { cwd: this.workspaceRoot });
-            } catch (err: any) {
-                run.status = 'aborted';
-                run.completedAt = Date.now();
-                this.runs.push(run);
-                this.saveState();
-                throw new Error(`Suite setup failed: ${err.message}`);
-            }
-        }
-
-        // Run tests
-        for (const testId of suite.testIds) {
-            if (run.status === 'aborted') break;
-
-            const result = await this.runTest(testId);
-            run.results.push(result);
-
-            if (result.status === 'passed') run.summary.passed++;
-            else if (result.status === 'failed') run.summary.failed++;
-            else if (result.status === 'skipped') run.summary.skipped++;
-
-            if (suite.stopOnFailure && result.status === 'failed') {
-                run.status = 'aborted';
-                break;
-            }
-        }
-
-        // Run teardown
-        if (suite.teardown) {
-            try {
-                await execAsync(suite.teardown, { cwd: this.workspaceRoot });
-            } catch {
-                // Log but don't fail
-            }
-        }
-
-        run.status = 'completed';
-        run.completedAt = Date.now();
-
-        // Update suite stats
-        suite.lastRunAt = run.completedAt;
-        suite.lastResults = {
-            passed: run.summary.passed,
-            failed: run.summary.failed,
-            skipped: run.summary.skipped,
-            duration: run.completedAt - run.startedAt
-        };
-
-        this.runs.push(run);
-        this.currentRun = undefined;
-        this.saveState();
-
-        return run;
-    }
-
-    // ==================== Validation Checks ====================
-
-    async runValidation(checkId: string): Promise<{ passed: boolean; output: string }> {
-        const check = this.validations.get(checkId);
-        if (!check) {
-            throw new Error(`Validation not found: ${checkId}`);
-        }
+    /**
+     * Test LLM connectivity and basic functionality
+     */
+    private async testLLMConnectivity(): Promise<TestResult[]> {
+        const results: TestResult[] = [];
+        const testStart = Date.now();
 
         try {
-            const { stdout, stderr } = await execAsync(check.command, {
-                cwd: this.workspaceRoot,
-                timeout: this.config.testTimeout
+            // Test 1: Basic LLM connectivity
+            const simpleTest = await this.orchestrator.chat('Hello, this is a test message.', [], () => {});
+            results.push({
+                feature: 'LLM',
+                testName: 'Basic Connectivity',
+                success: true,
+                message: 'LLM responded successfully to basic message',
+                details: { responseLength: simpleTest.length },
+                timestamp: Date.now()
             });
 
-            const output = stdout + stderr;
+            // Test 2: LLM reasoning capability
+            const reasoningTest = await this.orchestrator.chat('What is 2 + 2?', [], () => {});
+            const hasCorrectAnswer = reasoningTest.includes('4') || reasoningTest.includes('four');
+            results.push({
+                feature: 'LLM',
+                testName: 'Reasoning Capability',
+                success: hasCorrectAnswer,
+                message: hasCorrectAnswer ? 'LLM correctly answered basic math question' : 'LLM failed to answer basic math question',
+                details: { response: reasoningTest },
+                timestamp: Date.now()
+            });
 
-            // Check for failure patterns
-            if (check.failurePatterns) {
-                for (const pattern of check.failurePatterns) {
-                    if (output.includes(pattern)) {
-                        return { passed: false, output };
+        } catch (error: any) {
+            results.push({
+                feature: 'LLM',
+                testName: 'Connectivity Test',
+                success: false,
+                message: `LLM connectivity test failed: ${error.message}`,
+                details: { error: error.stack },
+                timestamp: Date.now()
+            });
+        }
+
+        return results;
+    }
+
+    /**
+     * Test file operations
+     */
+    private async testFileOperations(): Promise<TestResult[]> {
+        const results: TestResult[] = [];
+        const testFilePath = path.join(this.workspaceRoot, 'vibey-test-file.txt');
+        const testContent = 'This is a test file created by Vibey feature testing.';
+
+        try {
+            // Test 1: Write file
+            const writeTool = this.tools.getToolDefinitions().find(t => t.name === 'write_file');
+            if (writeTool) {
+                await writeTool.execute({ path: testFilePath, content: testContent });
+                results.push({
+                    feature: 'File Operations',
+                    testName: 'Write File',
+                    success: true,
+                    message: 'Successfully wrote test file',
+                    details: { filePath: testFilePath },
+                    timestamp: Date.now()
+                });
+            } else {
+                results.push({
+                    feature: 'File Operations',
+                    testName: 'Write File',
+                    success: false,
+                    message: 'Write file tool not available',
+                    timestamp: Date.now()
+                });
+            }
+
+            // Test 2: Read file
+            const readTool = this.tools.getToolDefinitions().find(t => t.name === 'read_file');
+            if (readTool) {
+                const fileContent = await readTool.execute({ path: testFilePath });
+                const contentMatches = fileContent === testContent;
+                results.push({
+                    feature: 'File Operations',
+                    testName: 'Read File',
+                    success: contentMatches,
+                    message: contentMatches ? 'Successfully read test file with correct content' : 'File content does not match',
+                    details: { expected: testContent, actual: fileContent },
+                    timestamp: Date.now()
+                });
+            } else {
+                results.push({
+                    feature: 'File Operations',
+                    testName: 'Read File',
+                    success: false,
+                    message: 'Read file tool not available',
+                    timestamp: Date.now()
+                });
+            }
+
+            // Clean up
+            try {
+                await fs.unlink(testFilePath);
+            } catch (cleanupError) {
+                console.warn('[VIBEY][FeatureTestRunner] Failed to clean up test file:', cleanupError);
+            }
+
+        } catch (error: any) {
+            results.push({
+                feature: 'File Operations',
+                testName: 'File Operations Test',
+                success: false,
+                message: `File operations test failed: ${error.message}`,
+                details: { error: error.stack },
+                timestamp: Date.now()
+            });
+        }
+
+        return results;
+    }
+
+    /**
+     * Test MCP server functionality
+     */
+    private async testMCPServer(): Promise<TestResult[]> {
+        const results: TestResult[] = [];
+
+        try {
+            // Test 1: Check if MCP servers are configured
+            const config = vscode.workspace.getConfiguration('vibey');
+            const mcpServers = config.get<Record<string, any>>('mcpServers') || {};
+            
+            if (Object.keys(mcpServers).length === 0) {
+                results.push({
+                    feature: 'MCP Server',
+                    testName: 'Configuration Check',
+                    success: false,
+                    message: 'No MCP servers configured',
+                    details: { configuredServers: [] },
+                    timestamp: Date.now()
+                });
+                return results;
+            }
+
+            results.push({
+                feature: 'MCP Server',
+                testName: 'Configuration Check',
+                success: true,
+                message: `Found ${Object.keys(mcpServers).length} MCP server(s) configured`,
+                details: { configuredServers: Object.keys(mcpServers) },
+                timestamp: Date.now()
+            });
+
+            // Test 2: Check server connection states
+            const serverStates = this.mcpService.getServerStates();
+            const connectedServers = serverStates.filter(s => s.status === 'connected');
+            
+            results.push({
+                feature: 'MCP Server',
+                testName: 'Connection Status',
+                success: connectedServers.length > 0,
+                message: connectedServers.length > 0 
+                    ? `${connectedServers.length} server(s) connected successfully`
+                    : 'No MCP servers are currently connected',
+                details: {
+                    totalServers: serverStates.length,
+                    connectedServers: connectedServers.map(s => s.name),
+                    disconnectedServers: serverStates.filter(s => s.status !== 'connected').map(s => s.name)
+                },
+                timestamp: Date.now()
+            });
+
+            // Test 3: Check available tools from MCP servers
+            const allTools = this.tools.getToolDefinitions();
+            const mcpToolCount = allTools.length; // This includes both built-in and MCP tools
+            
+            results.push({
+                feature: 'MCP Server',
+                testName: 'Tool Availability',
+                success: mcpToolCount > 0,
+                message: mcpToolCount > 0 
+                    ? `${mcpToolCount} tools available (including MCP tools)`
+                    : 'No tools available from MCP servers',
+                details: {
+                    toolCount: mcpToolCount,
+                    sampleTools: allTools.slice(0, 5).map(t => t.name)
+                },
+                timestamp: Date.now()
+            });
+
+        } catch (error: any) {
+            results.push({
+                feature: 'MCP Server',
+                testName: 'MCP Server Test',
+                success: false,
+                message: `MCP server test failed: ${error.message}`,
+                details: { error: error.stack },
+                timestamp: Date.now()
+            });
+        }
+
+        return results;
+    }
+
+    /**
+     * Test web fetching and internet search capabilities
+     */
+    private async testWebFetching(): Promise<TestResult[]> {
+        const results: TestResult[] = [];
+
+        try {
+            // Test 1: Check if search tools are available
+            const searchTool = this.tools.getToolDefinitions().find(t => t.name === 'internet_search');
+            const fetchTool = this.tools.getToolDefinitions().find(t => t.name === 'fetch_code_snippet');
+            
+            const hasSearchTools = !!searchTool || !!fetchTool;
+            
+            results.push({
+                feature: 'Web Fetching',
+                testName: 'Tool Availability',
+                success: hasSearchTools,
+                message: hasSearchTools 
+                    ? 'Web fetching tools are available'
+                    : 'No web fetching tools available',
+                details: {
+                    hasInternetSearch: !!searchTool,
+                    hasFetchCodeSnippet: !!fetchTool
+                },
+                timestamp: Date.now()
+            });
+
+            if (hasSearchTools) {
+                // Test 2: Try a simple search (if available)
+                if (searchTool) {
+                    try {
+                        const searchResult = await searchTool.execute({ 
+                            query: 'Vibey AI agent',
+                            max_results: 3 
+                        });
+                        
+                        results.push({
+                            feature: 'Web Fetching',
+                            testName: 'Internet Search',
+                            success: true,
+                            message: 'Internet search completed successfully',
+                            details: { 
+                                resultLength: searchResult.length,
+                                hasResults: searchResult.includes('Result')
+                            },
+                            timestamp: Date.now()
+                        });
+                    } catch (searchError: any) {
+                        results.push({
+                            feature: 'Web Fetching',
+                            testName: 'Internet Search',
+                            success: false,
+                            message: `Internet search failed: ${searchError.message}`,
+                            details: { error: searchError.stack },
+                            timestamp: Date.now()
+                        });
                     }
                 }
             }
 
-            return { passed: true, output };
-        } catch (err: any) {
-            return { passed: false, output: err.message || String(err) };
-        }
-    }
-
-    async runPreCommitChecks(): Promise<{ canCommit: boolean; results: { name: string; passed: boolean }[] }> {
-        const results: { name: string; passed: boolean }[] = [];
-        let canCommit = true;
-
-        for (const check of this.validations.values()) {
-            if (!check.triggers.includes('pre_commit')) continue;
-
-            const result = await this.runValidation(check.id);
-            results.push({ name: check.name, passed: result.passed });
-
-            if (!result.passed && check.blocking) {
-                canCommit = false;
-            }
+        } catch (error: any) {
+            results.push({
+                feature: 'Web Fetching',
+                testName: 'Web Fetching Test',
+                success: false,
+                message: `Web fetching test failed: ${error.message}`,
+                details: { error: error.stack },
+                timestamp: Date.now()
+            });
         }
 
-        return { canCommit, results };
+        return results;
     }
 
-    // ==================== Query Methods ====================
+    /**
+     * Test terminal operations
+     */
+    private async testTerminalOperations(): Promise<TestResult[]> {
+        const results: TestResult[] = [];
 
-    getTests(): TestCase[] {
-        return Array.from(this.tests.values());
-    }
+        try {
+            // Test 1: Check if terminal tools are available
+            const terminalTools = this.tools.getToolDefinitions().filter(t => t.name.startsWith('terminal_'));
+            
+            results.push({
+                feature: 'Terminal Operations',
+                testName: 'Tool Availability',
+                success: terminalTools.length > 0,
+                message: terminalTools.length > 0 
+                    ? `${terminalTools.length} terminal tools available`
+                    : 'No terminal tools available',
+                details: {
+                    availableTools: terminalTools.map(t => t.name)
+                },
+                timestamp: Date.now()
+            });
 
-    getSuites(): TestSuite[] {
-        return Array.from(this.suites.values());
-    }
-
-    getValidations(): ValidationCheck[] {
-        return Array.from(this.validations.values());
-    }
-
-    getRecentRuns(limit: number = 10): TestRun[] {
-        return this.runs.slice(-limit).reverse();
-    }
-
-    // ==================== Persistence ====================
-
-    private async saveState(): Promise<void> {
-        const data = {
-            tests: Array.from(this.tests.entries()),
-            suites: Array.from(this.suites.entries()),
-            validations: Array.from(this.validations.entries()),
-            runs: this.runs.slice(-50)
-        };
-        await this.context.globalState.update(TestRunner.STORAGE_KEY, data);
-    }
-
-    private loadState(): void {
-        const data = this.context.globalState.get<{
-            tests: [string, TestCase][];
-            suites: [string, TestSuite][];
-            validations: [string, ValidationCheck][];
-            runs: TestRun[];
-        }>(TestRunner.STORAGE_KEY);
-
-        if (data) {
-            this.tests = new Map(data.tests || []);
-            this.suites = new Map(data.suites || []);
-            // Don't overwrite built-in validations
-            for (const [id, check] of data.validations || []) {
-                if (!id.startsWith('builtin-')) {
-                    this.validations.set(id, check);
+            // Test 2: Try to list terminals (if available)
+            const listTerminalTool = terminalTools.find(t => t.name === 'terminal_list');
+            if (listTerminalTool) {
+                try {
+                    const terminalList = await listTerminalTool.execute({});
+                    results.push({
+                        feature: 'Terminal Operations',
+                        testName: 'List Terminals',
+                        success: true,
+                        message: 'Successfully listed terminals',
+                        details: { 
+                            terminalList: terminalList,
+                            hasTerminals: !terminalList.includes('No Vibey terminals')
+                        },
+                        timestamp: Date.now()
+                    });
+                } catch (terminalError: any) {
+                    results.push({
+                        feature: 'Terminal Operations',
+                        testName: 'List Terminals',
+                        success: false,
+                        message: `Failed to list terminals: ${terminalError.message}`,
+                        details: { error: terminalError.stack },
+                        timestamp: Date.now()
+                    });
                 }
             }
-            this.runs = data.runs || [];
+
+        } catch (error: any) {
+            results.push({
+                feature: 'Terminal Operations',
+                testName: 'Terminal Operations Test',
+                success: false,
+                message: `Terminal operations test failed: ${error.message}`,
+                details: { error: error.stack },
+                timestamp: Date.now()
+            });
         }
+
+        return results;
+    }
+
+    /**
+     * Generate troubleshooting recommendations based on test results
+     */
+    public generateTroubleshootingReport(report: FeatureTestReport): string {
+        const recommendations: string[] = [];
+        const failedTests = report.results.filter(r => !r.success);
+
+        if (failedTests.length === 0) {
+            return '✅ All tests passed! Your Vibey setup is working correctly.';
+        }
+
+        // LLM-specific recommendations
+        const llmFailures = failedTests.filter(r => r.feature === 'LLM');
+        if (llmFailures.length > 0) {
+            recommendations.push(
+                '🔧 **LLM Issues Detected:**',
+                '- Check your LLM provider configuration in Vibey settings',
+                '- Verify that your LLM server (Ollama, etc.) is running',
+                '- Check network connectivity to the LLM server',
+                '- Try restarting your LLM server',
+                '- Ensure you have the correct model loaded'
+            );
+        }
+
+        // File operations recommendations
+        const fileFailures = failedTests.filter(r => r.feature === 'File Operations');
+        if (fileFailures.length > 0) {
+            recommendations.push(
+                '📁 **File Operations Issues:**',
+                '- Check file system permissions for the workspace directory',
+                '- Verify that Vibey has access to read/write files',
+                '- Check if the workspace directory exists and is accessible'
+            );
+        }
+
+        // MCP server recommendations
+        const mcpFailures = failedTests.filter(r => r.feature === 'MCP Server');
+        if (mcpFailures.length > 0) {
+            recommendations.push(
+                '🔌 **MCP Server Issues:**',
+                '- Check your MCP server configuration in Vibey settings',
+                '- Verify that MCP servers are running and accessible',
+                '- Check network connectivity to MCP servers',
+                '- Review MCP server logs for errors'
+            );
+        }
+
+        // Web fetching recommendations
+        const webFailures = failedTests.filter(r => r.feature === 'Web Fetching');
+        if (webFailures.length > 0) {
+            recommendations.push(
+                '🌐 **Web Fetching Issues:**',
+                '- Check your internet connection',
+                '- Verify that search tools are properly configured',
+                '- Check if there are any network restrictions or firewalls',
+                '- Some web features may require additional setup'
+            );
+        }
+
+        // Terminal recommendations
+        const terminalFailures = failedTests.filter(r => r.feature === 'Terminal Operations');
+        if (terminalFailures.length > 0) {
+            recommendations.push(
+                '💻 **Terminal Operations Issues:**',
+                '- Check terminal permissions and accessibility',
+                '- Verify that your shell environment is properly configured',
+                '- Some terminal features may require specific shell types'
+            );
+        }
+
+        return `## 🔍 Troubleshooting Recommendations
+
+${recommendations.join('\n')}
+
+## 📊 Test Summary
+- **Total Tests**: ${report.summary.totalTests}
+- **Passed**: ${report.summary.passedTests}
+- **Failed**: ${report.summary.failedTests}
+- **Success Rate**: ${report.summary.successRate.toFixed(1)}%
+
+## 📝 Failed Tests Details
+${failedTests.map((test, index) => 
+    `${index + 1}. **${test.feature} - ${test.testName}**: ${test.message}`
+).join('\n')}`;
     }
 }

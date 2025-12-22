@@ -1,3 +1,5 @@
-export * from './types';
-export { TestRunner } from './test_runner';
+/**
+ * Testing module exports
+ */
 
+export { FeatureTestRunner, TestResult, FeatureTestReport } from './test_runner';
