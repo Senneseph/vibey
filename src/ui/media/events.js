@@ -5,9 +5,17 @@ import {
     getIsProcessing,
     getInputBox
 } from './chat_manager.js';
+import {
+    saveChatScrollPosition,
+    restoreChatScrollPosition,
+    autoScrollIfAtBottom
+} from './main.js';
 
 // DOM elements - lazy loaded
 let inputBox, sendBtn, attachBtn, settingsBtn, modelsBtn, contextArea, clearLLMStreamBtn;
+
+// Scroll position tracking for tab switching
+let lastActiveTab = 'chat';
 
 function initializeEventElements() {
     inputBox = document.getElementById('InputBox');
@@ -76,6 +84,11 @@ function initializeEventElements() {
 function setupTabs() {
     document.querySelectorAll('.tab').forEach(tab => {
         tab.addEventListener('click', () => {
+            // Save scroll position before switching away from chat tab
+            if (lastActiveTab === 'chat') {
+                saveChatScrollPosition();
+            }
+
             // Deactivate all
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
@@ -85,6 +98,14 @@ function setupTabs() {
             const viewId = tab.dataset.tab + '-view';
             const view = document.getElementById(viewId);
             if (view) view.classList.add('active');
+
+            // Update last active tab
+            lastActiveTab = tab.dataset.tab;
+
+            // Restore scroll position when returning to chat tab
+            if (tab.dataset.tab === 'chat') {
+                setTimeout(restoreChatScrollPosition, 50); // Small delay for DOM to settle
+            }
 
             if (tab.dataset.tab === 'tasks') {
                 vscode.postMessage({ type: 'getTasks' });

@@ -64,6 +64,10 @@ window.addEventListener('unhandledrejection', event => {
 // Scroll to bottom button
 let scrollToBottomButton = null;
 
+// Scroll position tracking for tab switching
+let chatScrollPositions = {};
+let lastActiveTab = 'chat';
+
 // Create scroll to bottom button
 function createScrollToBottomButton() {
     if (scrollToBottomButton) return;
@@ -97,6 +101,47 @@ function checkScrollPosition() {
     scrollToBottomButton.style.display = isAtBottom ? 'none' : 'block';
 }
 
+// Save scroll position when leaving chat tab
+function saveChatScrollPosition() {
+    const chatContainer = getChatContainer();
+    if (chatContainer) {
+        chatScrollPositions['chat'] = chatContainer.scrollTop;
+    }
+}
+
+// Restore scroll position when returning to chat tab
+function restoreChatScrollPosition() {
+    const chatContainer = getChatContainer();
+    if (!chatContainer) return;
+    
+    // Check if we have a saved scroll position
+    const savedPosition = chatScrollPositions['chat'];
+    
+    if (savedPosition !== undefined && savedPosition > 0) {
+        // Restore the saved position
+        chatContainer.scrollTop = savedPosition;
+    } else {
+        // No saved position or first time - scroll to bottom
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+}
+
+// Auto-scroll to bottom when new messages arrive if we're near the bottom
+function autoScrollIfAtBottom() {
+    const chatContainer = getChatContainer();
+    if (!chatContainer) return;
+    
+    const { scrollTop, scrollHeight, clientHeight } = chatContainer;
+    const isNearBottom = scrollTop + clientHeight >= scrollHeight - 20; // 20px tolerance
+    
+    if (isNearBottom) {
+        // Only auto-scroll if we're already near the bottom
+        setTimeout(() => {
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }, 50); // Small delay to allow DOM to update
+    }
+}
+
 // Incoming Messages
 window.addEventListener('message', event => {
     const message = event.data;
@@ -122,8 +167,10 @@ window.addEventListener('message', event => {
                 console.log('[VIBEY][Webview] No messages in restoreHistory payload.');
             }
 
-            // Scroll to bottom after restoring
+            // Scroll to bottom after restoring (use our improved logic)
             if (chatContainer && chatContainer.scrollHeight > 0) {
+                // For history restore, always scroll to bottom initially
+                // The user can then scroll up if they want to see older messages
                 chatContainer.scrollTop = chatContainer.scrollHeight;
             }
             break;
@@ -134,14 +181,8 @@ window.addEventListener('message', event => {
             break;
         case 'addMessage':
             renderMessage(message.role, message.content, message.timestamp);
-            const container = getChatContainer();
-            if (container) {
-                // Only auto-scroll if we're already at the bottom
-                const isAtBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 5;
-                if (isAtBottom) {
-                    container.scrollTop = container.scrollHeight;
-                }
-            }
+            // Use our improved auto-scroll function
+            autoScrollIfAtBottom();
             break;
         case 'llmRequest':
             // Display LLM request details in an expandable panel
@@ -208,3 +249,10 @@ const chatContainer = getChatContainer();
 if (chatContainer) {
     chatContainer.addEventListener('scroll', checkScrollPosition);
 }
+
+// Export scroll management functions for use in other modules
+export {
+    saveChatScrollPosition,
+    restoreChatScrollPosition,
+    autoScrollIfAtBottom
+};

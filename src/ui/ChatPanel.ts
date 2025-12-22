@@ -354,42 +354,42 @@ export class ChatPanel implements vscode.WebviewViewProvider {
 
             <div class="views-container">
                 <div id="chat-view" class="view active">
-                <div id="chat-container"></div>
+                    <div id="chat-container"></div>
 
-                <div id="input-area">
-                    <div id="context-area"></div>
-                    <div class="input-container">
-                        <textarea id="InputBox" placeholder="Ask Vibey... (Shift+Enter for new line)"></textarea>
-                        <div class="input-actions">
-                            <div class="toolbar">
-                                <button id="attach-btn" class="icon-btn" title="Add Context">📎</button>
-                                <button id="models-btn" class="icon-btn" title="Select Model">🤖</button>
-                                <button id="settings-btn" class="icon-btn" title="Settings">⚙️</button>
-                                <button id="test-btn" class="icon-btn" title="Run Feature Tests">🧪</button>
+                    <div id="input-area">
+                        <div id="context-area"></div>
+                        <div class="input-container">
+                            <textarea id="InputBox" placeholder="Ask Vibey... (Shift+Enter for new line)"></textarea>
+                            <div class="input-actions">
+                                <div class="toolbar">
+                                    <button id="attach-btn" class="icon-btn" title="Add Context">📎</button>
+                                    <button id="models-btn" class="icon-btn" title="Select Model">🤖</button>
+                                    <button id="settings-btn" class="icon-btn" title="Settings">⚙️</button>
+                                    <button id="test-btn" class="icon-btn" title="Run Feature Tests">🧪</button>
+                                </div>
+                                <button id="send-btn">Send ➤</button>
                             </div>
-                            <button id="send-btn">Send ➤</button>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <div id="tasks-view" class="view">
-                <div id="task-list">
-                    <!-- Tasks will be rendered here -->
-                    <div class="empty-state">No active tasks. Ask Vibey to start a task!</div>
+                <div id="tasks-view" class="view">
+                    <div id="task-list">
+                        <!-- Tasks will be rendered here -->
+                        <div class="empty-state">No active tasks. Ask Vibey to start a task!</div>
+                    </div>
                 </div>
-            </div>
 
-            <div id="llm-stream-view" class="view">
-                <div class="llm-stream-controls">
-                    <button id="clear-llm-stream" class="icon-btn" title="Clear LLM Stream">🗑️</button>
-                </div>
-                <div id="llm-stream-container">
-                    <!-- LLM stream updates will be rendered here -->
-                    <div class="empty-state">LLM stream updates will appear here</div>
+                <div id="llm-stream-view" class="view">
+                    <div class="llm-stream-controls">
+                        <button id="clear-llm-stream" class="icon-btn" title="Clear LLM Stream">🗑️</button>
+                    </div>
+                    <div id="llm-stream-container">
+                        <!-- LLM stream updates will be rendered here -->
+                        <div class="empty-state">LLM stream updates will appear here</div>
+                    </div>
                 </div>
             </div>
-        </div>
 
         <script type="module" src="${scriptUri}"></script>
         </body>
