@@ -1,5 +1,6 @@
 import { vscode } from './vscode_api.js';
 import { getChatContainer } from './chat_manager.js';
+import { marked } from 'https://esm.sh/marked@12.0.0';
 
 // Helper to format tool parameters nicely
 function formatToolParams(name, params) {

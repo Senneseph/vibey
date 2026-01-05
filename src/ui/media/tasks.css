@@ -1,0 +1,96 @@
+/* Tasks Component CSS */
+
+/* Task List */
+#task-list {
+    padding: 10px;
+    overflow-y: auto;
+}
+
+.empty-state {
+    text-align: center;
+    color: var(--vscode-descriptionForeground);
+    margin-top: 40px;
+    font-style: italic;
+}
+
+.task-item {
+    background: var(--vscode-list-hoverBackground);
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 10px;
+    border: 1px solid var(--vscode-widget-border);
+}
+
+.task-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.task-title {
+    font-weight: 600;
+    color: var(--vscode-textLink-foreground);
+    font-size: 1.05em;
+}
+
+.task-status {
+    font-size: 0.85em;
+    padding: 2px 6px;
+    border-radius: 12px;
+    font-weight: 500;
+}
+
+.task-status.running {
+    background: rgba(33, 150, 243, 0.2);
+    color: #2196f3;
+}
+
+.task-status.completed {
+    background: rgba(76, 175, 80, 0.2);
+    color: #4caf50;
+}
+
+.task-status.failed {
+    background: rgba(244, 67, 54, 0.2);
+    color: #f44336;
+}
+
+.task-description {
+    color: var(--vscode-editor-foreground);
+    font-size: 0.9em;
+    margin-bottom: 8px;
+    line-height: 1.4;
+}
+
+.task-meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.8em;
+    color: var(--vscode-descriptionForeground);
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--vscode-widget-border);
+}
+
+.task-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.task-action-btn {
+    padding: 4px 8px;
+    font-size: 0.8em;
+    border-radius: 4px;
+}
+
+.task-action-btn.cancel {
+    background: var(--vscode-errorForeground);
+    color: white;
+}
+
+.task-action-btn.retry {
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+}

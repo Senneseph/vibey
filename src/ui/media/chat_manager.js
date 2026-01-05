@@ -41,7 +41,7 @@ function updateSendButtonState() {
         sendBtn.textContent = 'Stop 🛑';
         sendBtn.className = 'stop';
         sendBtn.title = 'Stop Request';
-    } else if (isResumable && !inputBox.value.trim()) {
+    } else if (isResumable && !getInputBoxValue().trim()) {
         sendBtn.textContent = 'Resume ↺';
         sendBtn.className = 'resume';
         sendBtn.title = 'Resume Request';
@@ -49,6 +49,28 @@ function updateSendButtonState() {
         sendBtn.textContent = 'Send ➤';
         sendBtn.className = '';
         sendBtn.title = 'Send Message';
+    }
+}
+
+// Helper function to get the value from vscode-text-area
+function getInputBoxValue() {
+    if (!inputBox) return '';
+    
+    // For vscode-text-area, we need to access the internal textarea
+    const internalTextarea = inputBox.shadowRoot?.querySelector('textarea');
+    return internalTextarea ? internalTextarea.value : inputBox.value || '';
+}
+
+// Helper function to set the value for vscode-text-area
+function setInputBoxValue(value) {
+    if (!inputBox) return;
+    
+    // For vscode-text-area, we need to access the internal textarea
+    const internalTextarea = inputBox.shadowRoot?.querySelector('textarea');
+    if (internalTextarea) {
+        internalTextarea.value = value;
+    } else {
+        inputBox.value = value;
     }
 }
 
@@ -101,7 +123,7 @@ function handleSendClick() {
 }
 
 function sendMessage() {
-    const text = inputBox.value.trim();
+    const text = getInputBoxValue().trim();
     if (!text && contextFiles.length === 0) return;
 
     // specific for Resume: store these
@@ -116,7 +138,7 @@ function sendMessage() {
         context: contextFiles
     });
 
-    inputBox.value = '';
+    setInputBoxValue('');
     contextFiles = [];
     renderContext();
 }
@@ -133,7 +155,9 @@ export {
     setProcessing,
     updateSendButtonState,
     renderContext,
-    isProcessing
+    isProcessing,
+    getInputBoxValue,
+    setInputBoxValue
 };
 
 // Re-export isProcessing as a getter function for external modules

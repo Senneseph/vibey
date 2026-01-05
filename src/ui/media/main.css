@@ -111,6 +111,41 @@ body.theme-light {
     font-weight: bold;
 }
 
+/* Webview UI Toolkit Tabs - override default styling */
+vscode-tabs {
+    display: flex;
+    flex-direction: row;
+    border-bottom: 1px solid var(--vscode-panel-border);
+    background: var(--vscode-sideBar-background);
+    flex-shrink: 0;
+    overflow: none;
+    width: 100%;
+}
+
+vscode-tab {
+    padding: 10px 16px;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    opacity: 0.7;
+    font-size: 13px;
+    text-transform: uppercase;
+    font-weight: 500;
+    color: var(--vscode-editor-foreground);
+    transition: all 0.2s ease;
+}
+
+vscode-tab:hover {
+    opacity: 1;
+    background: var(--vscode-list-hoverBackground);
+}
+
+vscode-tab[active] {
+    opacity: 1;
+    border-bottom: 2px solid var(--vscode-panelTitle-activeBorder);
+    color: var(--vscode-panelTitle-activeForeground);
+    font-weight: bold;
+}
+
 /* Views Container */
 .views-container {
     position: relative;
@@ -420,23 +455,6 @@ body.theme-light {
     margin-bottom: 4px;
 }
 
-/* LLM Stream */
-#llm-stream-view {
-    display: none;
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    flex-direction: column;
-    overflow: hidden;
-    background-color: var(--vscode-editor-background);
-}
-
-#llm-stream-view.active {
-    display: flex;
-    position: relative;
-}
 
 /* Chat View */
 #chat-view {

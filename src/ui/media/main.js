@@ -12,7 +12,9 @@ import {
     sendMessage,
     setProcessing,
     updateSendButtonState,
-    renderContext
+    renderContext,
+    getInputBoxValue,
+    setInputBoxValue
 } from './chat_manager.js';
 import {
     allTasks,
@@ -36,9 +38,25 @@ function initApp() {
     // Setup tabs and keyboard shortcuts
     setupTabs();
     setupKeyboardShortcuts();
+    
+    // Initialize webview-ui-toolkit components
+    initializeToolkitComponents();
+    
     // Signal to extension that webview is ready to receive messages
     vscode.postMessage({ type: 'webviewReady' });
 }
+
+// Initialize webview-ui-toolkit components
+function initializeToolkitComponents() {
+    // Wait for the toolkit to be loaded
+    const checkToolkit = setInterval(() => {
+        if (window.vscode && window.vscode.Tabs) {
+            clearInterval(checkToolkit);
+            
+        }
+    }, 100);
+}
+
 
 // Global error handler
 window.onerror = function (message, source, lineno, colno, error) {
