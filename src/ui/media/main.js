@@ -3,7 +3,7 @@
 // Import all modules
 import { vscode } from './vscode_api.js';
 import { applyTheme, initThemeManager } from './theme_manager.js';
-import { renderMessage, handleAgentUpdate, getFullDateTime, showFullDateTime } from './message_renderer.js';
+import { renderMessage, handleAgentUpdate, getFullDateTime, toggleTimestampDisplay, getTimestampDisplayMode } from './message_renderer.js';
 import {
     initializeDOMElements,
     getChatContainer,
@@ -265,15 +265,15 @@ function setupTimestampToggle() {
                 e.preventDefault();
                 e.stopPropagation();
                 
-                // Toggle the global state
-                showFullDateTime = !showFullDateTime;
+                // Toggle the global state using the proper function
+                const newMode = toggleTimestampDisplay();
                 
                 // Update all timestamps in the chat
                 const allTimestamps = document.querySelectorAll('.message-timestamp');
                 allTimestamps.forEach(timestampElement => {
                     const fullTimestamp = timestampElement.getAttribute('data-full-timestamp');
                     if (fullTimestamp) {
-                        timestampElement.textContent = showFullDateTime
+                        timestampElement.textContent = newMode
                             ? getFullDateTime(fullTimestamp)
                             : '⏰';
                     }

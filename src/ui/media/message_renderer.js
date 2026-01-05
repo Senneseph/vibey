@@ -3,7 +3,7 @@ import { getChatContainer } from './chat_manager.js';
 import { marked } from 'https://esm.sh/marked@12.0.0';
 
 // Export functions and variables for use in other modules
-export { getFullDateTime, showFullDateTime };
+export { getFullDateTime, toggleTimestampDisplay, getTimestampDisplayMode };
 
 // Helper to format tool parameters nicely
 function formatToolParams(name, params) {
@@ -55,7 +55,20 @@ function getFullDateTime(timestamp = null) {
 }
 
 // Global state to track timestamp display mode
-let showFullDateTime = false;
+const timestampState = {
+    showFullDateTime: false
+};
+
+// Function to toggle timestamp display mode
+function toggleTimestampDisplay() {
+    timestampState.showFullDateTime = !timestampState.showFullDateTime;
+    return timestampState.showFullDateTime;
+}
+
+// Function to get current timestamp display mode
+function getTimestampDisplayMode() {
+    return timestampState.showFullDateTime;
+}
 
 function renderMessage(role, content, timestamp = null) {
     // If it's a tool output (raw JSON result)
@@ -86,7 +99,7 @@ function renderMessage(role, content, timestamp = null) {
     messageMeta.className = 'message-meta';
     
     const timestampValue = timestamp || getTimestamp();
-    const displayTimestamp = showFullDateTime ? getFullDateTime(timestampValue) : '⏰';
+    const displayTimestamp = timestampState.showFullDateTime ? getFullDateTime(timestampValue) : '⏰';
     
     messageMeta.innerHTML = `
         <span class="message-user">${role === 'user' ? 'You' : 'Vibey'}</span>
