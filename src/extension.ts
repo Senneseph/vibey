@@ -103,7 +103,13 @@ export async function activate(context: vscode.ExtensionContext) {
             const serverStates = mcpService.getServerStates();
             console.log('[VIBEY][activate] MCP server states:', serverStates);
 
-            if (serverStates.length === 0) {
+            // Check if built-in servers are disabled
+            const config = vscode.workspace.getConfiguration('vibey');
+            const disableFilesystem = config.get<boolean>('disableFilesystemServer', false);
+            const disableOpenSpec = config.get<boolean>('disableOpenSpecServer', false);
+            const builtinServersDisabled = disableFilesystem && disableOpenSpec;
+
+            if (serverStates.length === 0 && builtinServersDisabled) {
                 console.warn('[VIBEY][activate] No MCP servers available after initialization');
                 vscode.window.showWarningMessage('No MCP servers configured. Using built-in tools only.');
             } else {
@@ -241,7 +247,14 @@ export async function activate(context: vscode.ExtensionContext) {
                 return;
             }
             const states = mcpService.getServerStates();
-            if (states.length === 0) {
+            
+            // Check if built-in servers are disabled
+            const config = vscode.workspace.getConfiguration('vibey');
+            const disableFilesystem = config.get<boolean>('disableFilesystemServer', false);
+            const disableOpenSpec = config.get<boolean>('disableOpenSpecServer', false);
+            const builtinServersDisabled = disableFilesystem && disableOpenSpec;
+
+            if (states.length === 0 && builtinServersDisabled) {
                 vscode.window.showInformationMessage('No MCP servers configured. Add servers in settings (vibey.mcpServers)');
                 return;
             }
