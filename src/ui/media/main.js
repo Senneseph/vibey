@@ -3,7 +3,7 @@
 // Import all modules
 import { vscode } from './vscode_api.js';
 import { applyTheme, initThemeManager } from './theme_manager.js';
-import { renderMessage, handleAgentUpdate } from './message_renderer.js';
+import { renderMessage, handleAgentUpdate, getFullDateTime, showFullDateTime } from './message_renderer.js';
 import {
     initializeDOMElements,
     getChatContainer,
@@ -254,15 +254,46 @@ window.addEventListener('message', event => {
     }
 });
 
+// Setup timestamp toggle functionality
+function setupTimestampToggle() {
+    // Add event listener for timestamp clicks using event delegation
+    const chatContainer = getChatContainer();
+    if (chatContainer) {
+        chatContainer.addEventListener('click', function(e) {
+            // Check if the click was on a timestamp element
+            if (e.target.classList.contains('message-timestamp')) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                // Toggle the global state
+                showFullDateTime = !showFullDateTime;
+                
+                // Update all timestamps in the chat
+                const allTimestamps = document.querySelectorAll('.message-timestamp');
+                allTimestamps.forEach(timestampElement => {
+                    const fullTimestamp = timestampElement.getAttribute('data-full-timestamp');
+                    if (fullTimestamp) {
+                        timestampElement.textContent = showFullDateTime
+                            ? getFullDateTime(fullTimestamp)
+                            : '⏰';
+                    }
+                });
+            }
+        });
+    }
+}
+
 // Initialize the application when DOM is loaded
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function() {
         initApp();
         createScrollToBottomButton();
+        setupTimestampToggle();
     });
 } else {
     initApp();
     createScrollToBottomButton();
+    setupTimestampToggle();
 }
 
 // Add scroll event listener to monitor scrolling

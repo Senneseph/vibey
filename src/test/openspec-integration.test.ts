@@ -36,10 +36,13 @@ describe('OpenSpec Integration Property Tests', () => {
               get: jest.fn(),
               update: jest.fn()
           },
-          extensionPath: __dirname,
+          extensionPath: path.join(__dirname, '../..'),
           asAbsolutePath: (relativePath: string) => {
-              // Mock asAbsolutePath to resolve paths relative to the extension directory
-              // For OpenSpec server, we need to go up from src/test to the project root
+              // Use the helper function for correct path resolution
+              if (typeof global.resolveExtensionPath === 'function') {
+                  return global.resolveExtensionPath(relativePath);
+              }
+              // Fallback for compatibility
               if (relativePath === 'openspec-server/build/index.js') {
                   return path.join(__dirname, '../../openspec-server/build/index.js');
               }
@@ -62,6 +65,52 @@ describe('OpenSpec Integration Property Tests', () => {
     }
     await fs.remove(testWorkspace);
   });
+
+  /**
+   * Wait for MCP server to connect with timeout
+   */
+  async function waitForServerConnection(
+    mcpService: McpService, 
+    serverName: string, 
+    timeoutMs: number = 10000
+  ): Promise<boolean> {
+    const startTime = Date.now();
+    while (Date.now() - startTime < timeoutMs) {
+      const states = mcpService.getServerStates();
+      const server = states.find(s => s.name === serverName);
+      if (server && server.status === 'connected') {
+        return true;
+      }
+      if (server && server.status === 'error') {
+        return false;
+      }
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    return false;
+  }
+
+  /**
+   * Wait for MCP server to enter error state with timeout
+   */
+  async function waitForServerError(
+    mcpService: McpService, 
+    serverName: string, 
+    timeoutMs: number = 10000
+  ): Promise<boolean> {
+    const startTime = Date.now();
+    while (Date.now() - startTime < timeoutMs) {
+      const states = mcpService.getServerStates();
+      const server = states.find(s => s.name === serverName);
+      if (server && server.status === 'error') {
+        return true;
+      }
+      if (server && server.status === 'connected') {
+        return false; // Connected successfully, not an error
+      }
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    return false;
+  }
 
   /**
    * Property 1: OpenSpec MCP Server Auto-Start
@@ -95,6 +144,15 @@ describe('OpenSpec Integration Property Tests', () => {
               if (key === 'mcpServers') {
                 return config.mcpServers;
               }
+              if (key === 'mcpMarketplaceEnabled') {
+                return false;
+              }
+              if (key === 'disableFilesystemServer') {
+                return false;
+              }
+              if (key === 'disableOpenSpecServer') {
+                return false;
+              }
               return undefined;
             }),
             update: jest.fn()
@@ -105,8 +163,8 @@ describe('OpenSpec Integration Property Tests', () => {
           // Initialize MCP service (simulating Vibey startup)
           await mcpService.initialize();
 
-          // Wait a moment for server to start
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          // Wait for server to connect (up to 10 seconds)
+          const connected = await waitForServerConnection(mcpService, serverName, 10000);
 
           // Verify that OpenSpec MCP server is started and available
           const serverStates = mcpService.getServerStates();
@@ -118,7 +176,7 @@ describe('OpenSpec Integration Property Tests', () => {
           expect(openspecServer?.toolCount).toBeGreaterThan(0);
         }
       ),
-      { numRuns: 5, timeout: 30000 } // Reduced runs for integration test
+      { numRuns: 5, timeout: 60000 } // Increased timeout for async property tests
     );
   });
 
@@ -157,15 +215,31 @@ describe('OpenSpec Integration Property Tests', () => {
           };
 
           const mockGetConfiguration = jest.fn(() => ({
-            get: jest.fn((key: string) => key === 'mcpServers' ? serverConfig.mcpServers : undefined),
+            get: jest.fn((key: string) => {
+              if (key === 'mcpServers') {
+                return serverConfig.mcpServers;
+              }
+              if (key === 'mcpMarketplaceEnabled') {
+                return false;
+              }
+              if (key === 'disableFilesystemServer') {
+                return false;
+              }
+              if (key === 'disableOpenSpecServer') {
+                return false;
+              }
+              return undefined;
+            }),
             update: jest.fn()
           }));
 
           (global as any).mockVscode.workspace.getConfiguration = mockGetConfiguration;
 
           await mcpService.initialize();
-          await new Promise(resolve => setTimeout(resolve, 2000));
-
+          
+          // Wait for server to connect (up to 10 seconds)
+          const connected = await waitForServerConnection(mcpService, 'openspec', 10000);
+          
           // Get all registered tools
           const allTools = toolGateway.getToolDefinitions();
           const toolNames = allTools.map(tool => tool.name);
@@ -180,7 +254,7 @@ describe('OpenSpec Integration Property Tests', () => {
           expect(openspecTools.length).toBeGreaterThanOrEqual(testData.expectedTools.length);
         }
       ),
-      { numRuns: 3, timeout: 30000 }
+      { numRuns: 3, timeout: 60000 }
     );
   });
 
@@ -217,14 +291,30 @@ describe('OpenSpec Integration Property Tests', () => {
           };
 
           const mockGetConfiguration = jest.fn(() => ({
-            get: jest.fn((key: string) => key === 'mcpServers' ? serverConfig.mcpServers : undefined),
+            get: jest.fn((key: string) => {
+              if (key === 'mcpServers') {
+                return serverConfig.mcpServers;
+              }
+              if (key === 'mcpMarketplaceEnabled') {
+                return false;
+              }
+              if (key === 'disableFilesystemServer') {
+                return false;
+              }
+              if (key === 'disableOpenSpecServer') {
+                return false;
+              }
+              return undefined;
+            }),
             update: jest.fn()
           }));
 
           (global as any).mockVscode.workspace.getConfiguration = mockGetConfiguration;
 
           await mcpService.initialize();
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          
+          // Wait for server to connect (up to 10 seconds)
+          const connected = await waitForServerConnection(mcpService, 'openspec', 10000);
 
           // Find the OpenSpec tool
           const allTools = toolGateway.getToolDefinitions();
@@ -257,7 +347,7 @@ describe('OpenSpec Integration Property Tests', () => {
           }
         }
       ),
-      { numRuns: 3, timeout: 30000 }
+      { numRuns: 3, timeout: 60000 }
     );
   });
 
@@ -287,7 +377,21 @@ describe('OpenSpec Integration Property Tests', () => {
           };
 
           const mockGetConfiguration = jest.fn(() => ({
-            get: jest.fn((key: string) => key === 'mcpServers' ? serverConfig.mcpServers : undefined),
+            get: jest.fn((key: string) => {
+              if (key === 'mcpServers') {
+                return serverConfig.mcpServers;
+              }
+              if (key === 'mcpMarketplaceEnabled') {
+                return false;
+              }
+              if (key === 'disableFilesystemServer') {
+                return false;
+              }
+              if (key === 'disableOpenSpecServer') {
+                return false;
+              }
+              return undefined;
+            }),
             update: jest.fn()
           }));
 
@@ -295,7 +399,9 @@ describe('OpenSpec Integration Property Tests', () => {
 
           // Initialize MCP service with invalid config
           await mcpService.initialize();
-          await new Promise(resolve => setTimeout(resolve, 3000));
+          
+          // Wait for server to enter error state (up to 10 seconds)
+          const hasError = await waitForServerError(mcpService, 'openspec', 10000);
 
           // Check server states
           const serverStates = mcpService.getServerStates();
@@ -314,7 +420,7 @@ describe('OpenSpec Integration Property Tests', () => {
           expect(() => mcpService.getServerStates()).not.toThrow();
         }
       ),
-      { numRuns: 3, timeout: 30000 }
+      { numRuns: 3, timeout: 60000 }
     );
   });
 });

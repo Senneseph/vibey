@@ -256,10 +256,12 @@ export class FeatureTestRunner {
                     timedOut: waitResult.timedOut,
                     finalServerCount: waitResult.serverCount,
                     connectedCount: waitResult.connectedCount
-                }
+                },
+                explanation: 'Note: Built-in servers (filesystem, openspec) are automatically managed by MCP service and do not appear in workspace configuration. This is expected behavior.'
             };
 
             // Check if we have any servers (either configured or built-in)
+            // Note: built-in servers are managed by MCP service and won't appear in workspace config
             if (Object.keys(mcpServers).length === 0 && availableServerStates.length === 0) {
                 results.push({
                     feature: 'MCP Server',
@@ -270,6 +272,19 @@ export class FeatureTestRunner {
                     timestamp: Date.now()
                 });
                 return results;
+            }
+
+            // If we only have built-in servers (no user-configured servers), that's still a success
+            if (Object.keys(mcpServers).length === 0 && availableServerStates.length > 0) {
+                const connectedServers = availableServerStates.filter(s => s.status === 'connected');
+                results.push({
+                    feature: 'MCP Server',
+                    testName: 'Configuration Check',
+                    success: true,
+                    message: `Found ${availableServerStates.length} built-in MCP server(s): ${connectedServers.length} connected, ${availableServerStates.length - connectedServers.length} pending`,
+                    details: diagnostics,
+                    timestamp: Date.now()
+                });
             }
 
             // If we have server states (built-in servers), consider this a success

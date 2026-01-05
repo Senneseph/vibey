@@ -2,6 +2,9 @@ import { vscode } from './vscode_api.js';
 import { getChatContainer } from './chat_manager.js';
 import { marked } from 'https://esm.sh/marked@12.0.0';
 
+// Export functions and variables for use in other modules
+export { getFullDateTime, showFullDateTime };
+
 // Helper to format tool parameters nicely
 function formatToolParams(name, params) {
     if (!params) return '';
@@ -28,6 +31,31 @@ function getTimestamp() {
     const seconds = String(now.getSeconds()).padStart(2, '0');
     return `${hours}:${minutes}:${seconds}`;
 }
+
+// Utility: Get full date and time format
+function getFullDateTime(timestamp = null) {
+    let dateObj;
+    if (timestamp) {
+        // Parse existing timestamp (HH:MM:SS format)
+        const [hours, minutes, seconds] = timestamp.split(':');
+        dateObj = new Date();
+        dateObj.setHours(parseInt(hours), parseInt(minutes), parseInt(seconds));
+    } else {
+        dateObj = new Date();
+    }
+    
+    const year = dateObj.getFullYear();
+    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const day = String(dateObj.getDate()).padStart(2, '0');
+    const hours = String(dateObj.getHours()).padStart(2, '0');
+    const minutes = String(dateObj.getMinutes()).padStart(2, '0');
+    const seconds = String(dateObj.getSeconds()).padStart(2, '0');
+    
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+}
+
+// Global state to track timestamp display mode
+let showFullDateTime = false;
 
 function renderMessage(role, content, timestamp = null) {
     // If it's a tool output (raw JSON result)
@@ -56,9 +84,13 @@ function renderMessage(role, content, timestamp = null) {
     
     const messageMeta = document.createElement('div');
     messageMeta.className = 'message-meta';
+    
+    const timestampValue = timestamp || getTimestamp();
+    const displayTimestamp = showFullDateTime ? getFullDateTime(timestampValue) : '⏰';
+    
     messageMeta.innerHTML = `
         <span class="message-user">${role === 'user' ? 'You' : 'Vibey'}</span>
-        <span class="message-timestamp">${timestamp || getTimestamp()}</span>
+        <span class="message-timestamp" data-full-timestamp="${timestampValue}">${displayTimestamp}</span>
     `;
     
     const messageContent = document.createElement('div');

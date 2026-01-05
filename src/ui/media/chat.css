@@ -51,6 +51,14 @@
 .message-timestamp {
     color: var(--vscode-descriptionForeground);
     font-family: 'Courier New', monospace;
+    cursor: pointer;
+    user-select: none;
+    transition: opacity 0.2s ease;
+}
+
+.message-timestamp:hover {
+    opacity: 0.8;
+    text-decoration: underline;
 }
 
 /* Messages */
