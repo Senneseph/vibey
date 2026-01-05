@@ -357,12 +357,12 @@ export class ChatPanel implements vscode.WebviewViewProvider {
                             <textarea id="InputBox" placeholder="Ask Vibey... (Shift+Enter for new line)" class="input-box"></textarea>
                             <div class="input-actions">
                                 <div class="toolbar">
-                                    <vscode-button id="attach-btn" appearance="icon" title="Add Context">📎</vscode-button>
-                                    <vscode-button id="models-btn" appearance="icon" title="Select Model">🤖</vscode-button>
-                                    <vscode-button id="settings-btn" appearance="icon" title="Settings">⚙️</vscode-button>
-                                    <vscode-button id="test-btn" appearance="icon" title="Run Feature Tests">🧪</vscode-button>
+                                    <button id="attach-btn" class="icon-btn" title="Add Context">📎</button>
+                                    <button id="models-btn" class="icon-btn" title="Select Model">🤖</button>
+                                    <button id="settings-btn" class="icon-btn" title="Settings">⚙️</button>
+                                    <button id="test-btn" class="icon-btn" title="Run Feature Tests">🧪</button>
                                 </div>
-                                <vscode-button id="send-btn">Send ➤</vscode-button>
+                                <button id="send-btn" class="send-btn">Send ➤</button>
                             </div>
                         </div>
                     </div>
