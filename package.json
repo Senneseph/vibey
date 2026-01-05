@@ -3,7 +3,7 @@
     "displayName": "Vibey",
     "description": "Offline-first AI Coding Agent",
     "publisher": "vibey-project",
-    "version": "0.5.8",
+    "version": "0.5.9",
     "icon": "icon.png",
     "repository": {
         "type": "git",
@@ -59,6 +59,36 @@
                     "type": "object",
                     "default": {},
                     "description": "Configure MCP servers. Key is server name, Value is command and arguments (e.g. { \"command\": \"node\", \"args\": [\"server.js\"] })"
+                },
+                "vibey.mcpMarketplaceEnabled": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Enable MCP marketplace integration"
+                },
+                "vibey.mcpMarketplaceAutoUpdate": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Automatically check for marketplace updates"
+                },
+                "vibey.disableFilesystemServer": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Disable the built-in Filesystem MCP server"
+                },
+                "vibey.disableOpenSpecServer": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Disable the built-in OpenSpec MCP server"
+                },
+                "vibey.memoryBankEnabled": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Enable memory bank for persistent context storage"
+                },
+                "vibey.memoryMaxSizeMB": {
+                    "type": "number",
+                    "default": 100,
+                    "description": "Maximum memory bank size in MB (50-500 recommended)"
                 },
                 "vibey.preferredShell": {
                     "type": "string",
@@ -143,6 +173,16 @@
                 "command": "vibey.mcpListTools",
                 "title": "Vibey: List All Tools",
                 "icon": "$(tools)"
+            },
+            {
+                "command": "vibey.showMcpMarketplace",
+                "title": "Vibey: Show MCP Marketplace",
+                "icon": "$(extensions)"
+            },
+            {
+                "command": "vibey.refreshMcpMarketplace",
+                "title": "Vibey: Refresh MCP Marketplace",
+                "icon": "$(sync)"
             },
             {
                 "command": "vibey.diagnostics",

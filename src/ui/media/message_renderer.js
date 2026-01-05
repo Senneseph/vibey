@@ -220,15 +220,13 @@ function handleAgentUpdate(update) {
             // Display per-message token usage with meter
             div.className = 'message system-update per-message-tokens';
             div.innerHTML = `
-                <strong>📊 Per-Message Token Usage:</strong>
-                <div style="margin-top: 5px; font-size: 0.9em;">
-                    This message: ${update.messageTokens} tokens<br>
-                    Current total: ${update.currentTotal} tokens (${update.percentage}%)<br>
-                    Remaining: ${update.remaining} tokens
+                <div style="margin-top: 0px; font-size: 0.9em;">
+                    <strong>📊 Per-Message Token Usage:</strong>
+                    This message: ${update.messageTokens} tokens, Current total: ${update.currentTotal} tokens (${update.percentage}%), Remaining: ${update.remaining} tokens
                 </div>
-                <div class="token-meter">
-                    ${update.meter}
-                </div>
+                <!-- <div class="token-meter">
+                     ${update.meter}
+                </div>-->
             `;
             break;
         case 'contextCondensed':
@@ -347,6 +345,21 @@ function handleAgentUpdate(update) {
                 llmStreamContainer.scrollTop = llmStreamContainer.scrollHeight;
             }
             return;
+        case 'info':
+            // Display info messages
+            div.className = 'message system-update info';
+            div.innerHTML = `<div style="background: #e3f2fd; padding: 10px; border-left: 3px solid #2196f3; margin: 5px 0;">${marked.parse(update.message || '')}</div>`;
+            break;
+        case 'error':
+            // Display error messages
+            div.className = 'message system-update error';
+            div.innerHTML = `<div style="background: #ffebee; padding: 10px; border-left: 3px solid #f44336; margin: 5px 0;">${marked.parse(update.message || '')}</div>`;
+            break;
+        case 'warning':
+            // Display warning messages
+            div.className = 'message system-update warning';
+            div.innerHTML = `<div style="background: #fff3e0; padding: 10px; border-left: 3px solid #ff9800; margin: 5px 0;">${marked.parse(update.message || '')}</div>`;
+            break;
     }
     getChatContainer().appendChild(div);
     getChatContainer().scrollTop = getChatContainer().scrollHeight;

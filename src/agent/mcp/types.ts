@@ -54,13 +54,15 @@ export interface McpPromptArgument {
 }
 
 /** Event types for MCP service */
-export type McpEventType = 
+export type McpEventType =
     | 'server-connected'
     | 'server-disconnected'
     | 'server-error'
     | 'tools-updated'
     | 'resources-updated'
-    | 'prompts-updated';
+    | 'prompts-updated'
+    | 'marketplace-updated'
+    | 'marketplace-error';
 
 export interface McpEvent {
     type: McpEventType;

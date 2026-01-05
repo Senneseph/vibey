@@ -20,15 +20,19 @@ import { DailyHistoryManager } from './agent/daily_history_manager';
 import { McpService } from './agent/mcp/mcp_service';
 import { MetricsCollector } from './agent/metrics/metrics_collector';
 import { createSearchTools } from './tools/definitions/search';
+import { createMcpTools } from './tools/definitions/mcp';
 import { ContextManager } from './agent/context_manager';
 import { FeatureTestRunner, FeatureTestReport } from './agent/testing/test_runner';
+import { McpMarketplaceView } from './ui/marketplace/McpMarketplaceView';
+import { MemoryService } from './agent/mcp/memory_service';
 
 // Module-level references for cleanup
 let mcpService: McpService | undefined;
 let terminalManager: VibeyTerminalManager | undefined;
 let metricsCollector: MetricsCollector | undefined;
+let memoryService: MemoryService | undefined;
 
-export function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
     try {
         console.log('[VIBEY][activate] Vibey is now active!');
 
@@ -72,14 +76,71 @@ export function activate(context: vscode.ExtensionContext) {
 
         // Initialize MCP Service for external tool discovery
         mcpService = new McpService(gateway, context);
-        mcpService.initialize().catch(err => {
-            console.error('[Vibey] Failed to initialize MCP service:', err);
+
+        // Register MCP management tools (these allow the agent to query MCP server status)
+        const mcpTools = createMcpTools(mcpService);
+        mcpTools.forEach(t => gateway.registerTool(t));
+        console.log('[VIBEY][activate] Registered MCP management tools');
+
+        // Add event listeners for MCP service
+        mcpService.addEventListener((event) => {
+            console.log('[VIBEY][MCP] Event:', event.type, event);
+            if (event.type === 'server-connected') {
+                vscode.window.showInformationMessage(`✅ MCP Server connected: ${event.serverName}`);
+            } else if (event.type === 'server-disconnected') {
+                vscode.window.showWarningMessage(`🔌 MCP Server disconnected: ${event.serverName}`);
+            } else if (event.type === 'server-error') {
+                vscode.window.showErrorMessage(`❌ MCP Server error: ${event.serverName}: ${event.data?.error || 'Unknown error'}`);
+            }
         });
+
+        try {
+            console.log('[VIBEY][activate] Initializing MCP service...');
+            await mcpService.initialize();
+            console.log('[VIBEY][activate] MCP service initialized successfully');
+
+            // Check server states after initialization
+            const serverStates = mcpService.getServerStates();
+            console.log('[VIBEY][activate] MCP server states:', serverStates);
+
+            if (serverStates.length === 0) {
+                console.warn('[VIBEY][activate] No MCP servers available after initialization');
+                vscode.window.showWarningMessage('No MCP servers configured. Using built-in tools only.');
+            } else {
+                const connectedServers = serverStates.filter(s => s.status === 'connected');
+                if (connectedServers.length > 0) {
+                    vscode.window.showInformationMessage(`✅ MCP: ${connectedServers.length} server(s) connected`);
+                }
+            }
+        } catch (err: any) {
+            console.error('[VIBEY][activate] ❌ Failed to initialize MCP service:', err);
+            console.error('[VIBEY][activate] MCP Error details:', {
+                name: err.name,
+                message: err.message,
+                stack: err.stack,
+                cause: err.cause
+            });
+            vscode.window.showErrorMessage(`❌ MCP Service failed: ${err.message}. Check Extension Host output.`);
+        }
 
         // Create LLM provider based on configuration
         const config = vscode.workspace.getConfiguration('vibey');
         const provider = config.get<string>('provider') || 'ollama';
         let llm: any;
+        
+        // Initialize Memory Service
+        memoryService = new MemoryService(mcpService, context);
+        
+        // Load memory bank if enabled
+        const memoryEnabled = config.get<boolean>('memoryBankEnabled', true);
+        if (memoryEnabled) {
+            try {
+                await memoryService.loadMemoryBank();
+                console.log('[VIBEY][activate] Memory service initialized successfully');
+            } catch (error) {
+                console.error('[VIBEY][activate] Failed to initialize memory service:', error);
+            }
+        }
         
         if (provider === 'openai-compatible') {
             llm = new OpenAICompatibleClient();
@@ -92,7 +153,7 @@ export function activate(context: vscode.ExtensionContext) {
         const historyManager = new DailyHistoryManager(context, workspaceRoot);
         
         // Initialize feature test runner
-        const featureTestRunner = new FeatureTestRunner(orchestrator, gateway, mcpService, workspaceRoot);
+        const featureTestRunner = new FeatureTestRunner(orchestrator, gateway, mcpService, taskManager, workspaceRoot);
 
         // Export metrics collector for use in LLM provider
         const vibeyExtension = vscode.extensions.getExtension('vibey.vibey');
@@ -147,10 +208,23 @@ export function activate(context: vscode.ExtensionContext) {
                 });
 
                 if (selected === 'Clear Context') {
-                    const contextManager = new ContextManager();
-                    contextManager.clearMasterContext();
-                    vscode.window.showInformationMessage('Context cleared. Starting fresh!');
-                } else if (selected) {
+                   // Reset the orchestrator's context - this will clear both the conversation history AND the context manager
+                   orchestrator.resetContext();
+                   
+                   // Also clear the chat panel's history
+                   const chatProvider = new ChatPanel(context.extensionUri, orchestrator, taskManager, historyManager);
+                   await chatProvider.clearChatPanel();
+                   
+                   // Clear the history manager
+                   await historyManager.clearHistory();
+                   
+                   // Clear the memory service if available
+                   if (memoryService) {
+                       await memoryService.clearMemoryBank();
+                   }
+                   
+                   vscode.window.showInformationMessage('✅ All context cleared. Starting fresh!');
+               } else if (selected) {
                     await vscode.workspace.getConfiguration('vibey').update('model', selected, vscode.ConfigurationTarget.Global);
                     vscode.window.showInformationMessage(`Vibey model set to: ${selected}`);
                 }
@@ -345,6 +419,26 @@ export function activate(context: vscode.ExtensionContext) {
             }
         });
 
+        // MCP Marketplace Commands
+        const showMarketplaceCommand = vscode.commands.registerCommand('vibey.showMcpMarketplace', () => {
+            if (!mcpService) {
+                vscode.window.showErrorMessage('MCP service not initialized');
+                return;
+            }
+            const marketplaceView = new McpMarketplaceView(context, mcpService);
+            marketplaceView.show();
+        });
+
+        const refreshMarketplaceCommand = vscode.commands.registerCommand('vibey.refreshMcpMarketplace', async () => {
+            if (!mcpService) {
+                vscode.window.showErrorMessage('MCP service not initialized');
+                return;
+            }
+            vscode.window.showInformationMessage('Refreshing MCP marketplace...');
+            await mcpService.refreshMarketplace();
+            vscode.window.showInformationMessage('MCP marketplace refreshed successfully');
+        });
+
         context.subscriptions.push(startCommand);
         context.subscriptions.push(settingsCommand);
         context.subscriptions.push(selectModelCommand);
@@ -354,6 +448,8 @@ export function activate(context: vscode.ExtensionContext) {
         context.subscriptions.push(diagnosticCommand);
         context.subscriptions.push(clearHistoryCommand);
         context.subscriptions.push(featureTestCommand);
+        context.subscriptions.push(showMarketplaceCommand);
+        context.subscriptions.push(refreshMarketplaceCommand);
 
         console.log('[VIBEY][activate] Extension activated successfully!');
     } catch (error: any) {
@@ -575,5 +671,10 @@ export async function deactivate() {
     if (terminalManager) {
         terminalManager.dispose();
         terminalManager = undefined;
+    }
+    
+    if (memoryService) {
+        // Memory service doesn't need explicit disposal, but we can clear it
+        memoryService = undefined;
     }
 }

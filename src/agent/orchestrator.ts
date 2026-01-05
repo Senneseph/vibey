@@ -3,6 +3,7 @@ import { AgentContext, LLMProvider, ChatMessage } from './types';
 import { ToolGateway } from '../tools/gateway';
 import { ToolCall, ToolDefinition } from '../tools/schema';
 import { ContextManager, ContextItem } from './context_manager';
+import { ConversationManager } from './conversation_manager';
 import { getContextForTask, resolveContext } from './context_utils';
 import { callLLM, parseLLMResponse } from './llm_utils';
 import { executeTool, handleToolResult } from './tool_utils';
@@ -14,6 +15,7 @@ import { getTokenManager, TokenManager, TokenUsage } from './token_manager';
 export class AgentOrchestrator {
     private context: AgentContext;
     private tokenManager: TokenManager;
+    private conversationManager: ConversationManager;
 
     private contextManager: ContextManager;
     /**
@@ -28,6 +30,20 @@ export class AgentOrchestrator {
         }
     }
 
+    /**
+     * Reset the agent's context and memory
+     */
+    public resetContext() {
+        // Clear the context history, keeping only the system prompt
+        this.conversationManager.clearHistory();
+        
+        // Clear the context manager's master context AND all checkpoints
+        this.contextManager.clearMasterContext();
+        this.contextManager.clearAllCheckpointContext();
+        
+        console.log('[VIBEY][Orchestrator] Context reset completed - all context cleared');
+    }
+
     constructor(
         private llm: LLMProvider,
         private tools: ToolGateway,
@@ -35,11 +51,10 @@ export class AgentOrchestrator {
     ) {
         this.contextManager = new ContextManager();
         this.tokenManager = getTokenManager();
+        this.conversationManager = new ConversationManager(this.getSystemPrompt());
         this.context = {
             workspaceRoot,
-            history: [
-                { role: 'system', content: this.getSystemPrompt() }
-            ]
+            history: this.conversationManager.getHistory()
         };
     }
 
@@ -268,18 +283,22 @@ ${summaryResponse}
             const fullMessage = userMessage + contextBlock;
             console.log(`[VIBEY][Orchestrator] Full message size: ${fullMessage.length} chars (~${Math.ceil(fullMessage.length / 4)} tokens)`);
             console.log(`[VIBEY][Orchestrator] System prompt size: ${this.context.history[0].content.length} chars (~${Math.ceil(this.context.history[0].content.length / 4)} tokens)`);
-            
-            pushHistory(this.context.history, { role: 'user', content: fullMessage });
+
+            this.conversationManager.addUserMessage(fullMessage);
+            this.context.history = this.conversationManager.getHistory();
             console.log(`[VIBEY][Orchestrator] Total history size: ${JSON.stringify(this.context.history).length} bytes`);
             
             if (onUpdate) onUpdate({ type: 'thinking', message: 'Strategic planning with full context window...' });
-            const MAX_TURNS = 256;
-            let turns = 0;
             let finalResponse = '';
-            while (turns < MAX_TURNS) {
+            let lastResponseText = ''; // Track the last response for debugging
+            let iterationCount = 0;
+            const maxIterations = 20; // Prevent infinite loops
+
+            while (iterationCount < maxIterations) {
+                iterationCount++;
+                console.log(`[VIBEY][Orchestrator] Loop iteration ${iterationCount}/${maxIterations}`);
                 if (signal.aborted) throw new Error('Request cancelled by user');
-                turns++;
-                if (onUpdate) onUpdate({ type: 'thinking', message: turns === 1 ? 'Analyzing request...' : `Turn ${turns}: Reasoning...` });
+                if (onUpdate) onUpdate({ type: 'thinking', message: 'Analyzing request...' });
                 
                 // Log LLM request details before sending
                 const historySize = JSON.stringify(this.context.history).length;
@@ -299,20 +318,96 @@ ${summaryResponse}
                 });
                 
                 // Send request details to UI
-                if (onUpdate) {
-                    onUpdate({
-                        type: 'llmRequest',
-                        payload: {
-                            model: 'ollama',
-                            messages: this.context.history,
-                            messageCount: messageCount
-                        },
-                        estimatedTokens: estimatedTokens,
-                        duration: 0
-                    });
-                }
-                
-                const responseText = await callLLM(this.llm, this.context.history, signal);
+               if (onUpdate) {
+                   onUpdate({
+                       type: 'llmRequest',
+                       payload: {
+                           model: 'ollama',
+                           messages: this.context.history,
+                           messageCount: messageCount
+                       },
+                       estimatedTokens: estimatedTokens,
+                       duration: 0
+                   });
+               }
+               
+               let responseText;
+               try {
+                   // Use the conversation manager to get the history for the LLM
+                   const historyForLLM = this.conversationManager.getHistoryForLLM();
+
+                   // DEBUG: Show what we're sending to the LLM in the UI
+                   if (onUpdate) {
+                       const debugInfo = `**[DEBUG] LLM Call #${iterationCount}**
+
+Sending ${historyForLLM.length} messages to LLM:
+${historyForLLM.slice(-3).map((m, i) => `${i + 1}. **${m.role}**: ${typeof m.content === 'string' ? m.content.substring(0, 150) : JSON.stringify(m.content).substring(0, 150)}...`).join('\n')}`;
+
+                       onUpdate({
+                           type: 'info',
+                           message: debugInfo
+                       });
+                   }
+
+                   console.log(`[VIBEY][Orchestrator] ========== LLM CALL #${iterationCount} ==========`);
+                   console.log(`[VIBEY][Orchestrator] Sending ${historyForLLM.length} messages to LLM`);
+                   historyForLLM.forEach((msg, idx) => {
+                       const preview = typeof msg.content === 'string' ? msg.content.substring(0, 200) : JSON.stringify(msg.content).substring(0, 200);
+                       console.log(`[VIBEY][Orchestrator]   [${idx}] ${msg.role}: ${preview}...`);
+                   });
+
+                   responseText = await callLLM(this.llm, historyForLLM, signal);
+                   lastResponseText = responseText; // Store for debugging
+
+                   // DEBUG: Show what we got back from the LLM in the UI
+                   if (onUpdate) {
+                       const responsePreview = responseText.substring(0, 500);
+                       onUpdate({
+                           type: 'info',
+                           message: `**[DEBUG] LLM Response #${iterationCount}**\n\n\`\`\`\n${responsePreview}${responseText.length > 500 ? '\n...(truncated)' : ''}\n\`\`\``
+                       });
+                   }
+
+                   console.log(`[VIBEY][Orchestrator] ========== LLM RESPONSE #${iterationCount} ==========`);
+                   console.log(`[VIBEY][Orchestrator] Response length: ${responseText.length} chars`);
+                   console.log(`[VIBEY][Orchestrator] Response: ${responseText.substring(0, 500)}...`);
+               } catch (error: any) {
+                   // Log the full API message in the chat window for debugging
+                   console.error(`[VIBEY][Orchestrator] LLM API Error:`, error);
+
+                   // Create detailed error report for UI
+                   const errorReport = `**LLM API Error**
+
+${error.message}
+
+**Error Details:**
+- Error Type: ${error.name || 'Unknown'}
+- Message Count: ${this.context.history.length}
+- Estimated Tokens: ${tokenUsage.total}
+
+**Stack Trace:**
+\`\`\`
+${error.stack || 'No stack trace available'}
+\`\`\`
+
+**Last Message Sent:**
+\`\`\`
+${JSON.stringify(this.context.history[this.context.history.length - 1], null, 2).substring(0, 500)}
+\`\`\`
+
+**Token Usage:**
+\`\`\`json
+${JSON.stringify(tokenUsage, null, 2)}
+\`\`\``;
+
+                   if (onUpdate) {
+                       onUpdate({
+                           type: 'error',
+                           message: errorReport
+                       });
+                   }
+                   throw error;
+               }
                 
                 // Calculate actual fetch duration and send update
                 const fetchDuration = Date.now() - requestStartTime;
@@ -330,54 +425,140 @@ ${summaryResponse}
                     });
                 }
                 if (signal.aborted) throw new Error('Request cancelled by user');
-                const parsed = parseLLMResponse(responseText);
+
+                console.log(`[VIBEY][Orchestrator] ========== PARSING RESPONSE #${iterationCount} ==========`);
+
+                const parsed = parseLLMResponse(responseText, onUpdate);
+                console.log(`[VIBEY][Orchestrator] Parsed result:`, JSON.stringify(parsed, null, 2));
+                console.log(`[VIBEY][Orchestrator] Type checks:`);
+                console.log(`[VIBEY][Orchestrator]   - parsed is null/undefined: ${!parsed}`);
+                console.log(`[VIBEY][Orchestrator]   - has 'text' property: ${!!parsed?.text}`);
+                console.log(`[VIBEY][Orchestrator]   - has 'thought' property: ${!!parsed?.thought}`);
+                console.log(`[VIBEY][Orchestrator]   - has 'tool_calls' property: ${!!parsed?.tool_calls}`);
+                console.log(`[VIBEY][Orchestrator]   - tool_calls is array: ${Array.isArray(parsed?.tool_calls)}`);
+
+                // DEBUG: Show parsing decision in UI
+                if (onUpdate) {
+                    const decision = !parsed || parsed.text ? 'PLAIN TEXT' :
+                                   parsed.tool_calls && Array.isArray(parsed.tool_calls) ? `TOOL CALLS (${parsed.tool_calls.length})` :
+                                   'FINAL RESPONSE';
+                    onUpdate({
+                        type: 'info',
+                        message: `**[DEBUG] Parse Decision #${iterationCount}**: ${decision}\n\nParsed: \`${JSON.stringify(parsed, null, 2).substring(0, 300)}\``
+                    });
+                }
+
                 if (!parsed || parsed.text) {
+                    console.log(`[VIBEY][Orchestrator] ✅ DECISION: Treating as plain text response - BREAKING LOOP`);
+                    if (onUpdate) {
+                        onUpdate({ type: 'info', message: `**[DEBUG]** Setting final response and exiting loop` });
+                    }
                     pushHistory(this.context.history, { role: 'assistant', content: responseText });
                     finalResponse = responseText;
                     break;
                 }
                 if (parsed.thought && onUpdate) {
+                    console.log(`[VIBEY][Orchestrator] Sending thought update: ${parsed.thought}`);
                     onUpdate({ type: 'thought', message: parsed.thought });
                 }
                 if (parsed.tool_calls && Array.isArray(parsed.tool_calls)) {
-                    pushHistory(this.context.history, { role: 'assistant', content: responseText });
-                    for (const call of parsed.tool_calls) {
-                        if (signal.aborted) throw new Error('Request cancelled by user');
-                        try {
-                            if (onUpdate) onUpdate({ type: 'tool_start', id: call.id, tool: call.name, parameters: call.parameters });
-                            const result = await executeTool(this.tools, call);
-                            if (onUpdate) onUpdate({ type: 'tool_end', id: call.id, tool: call.name, success: true, result });
-                            handleToolResult(this.context.history, result, call);
+                    console.log(`[VIBEY][Orchestrator] ✅ DECISION: Processing ${parsed.tool_calls.length} tool calls - WILL CONTINUE LOOP`);
+                   this.conversationManager.addAssistantMessage(responseText);
+                   for (const call of parsed.tool_calls) {
+                       if (signal.aborted) throw new Error('Request cancelled by user');
+                       try {
+                           if (onUpdate) onUpdate({ type: 'tool_start', id: call.id, tool: call.name, parameters: call.parameters });
+                           const result = await executeTool(this.tools, call);
+                           if (onUpdate) onUpdate({ type: 'tool_end', id: call.id, tool: call.name, success: true, result });
+                           handleToolResult(this.context.history, result, call);
                             
-                            // If the tool result contains new context, add it to master context
-                            if (result && typeof result === 'object' && result.content) {
-                                // Add to master context for future reference
-                                if (call.name === 'read_file') {
-                                    const filePath = call.parameters.path;
-                                    const key = `context_${filePath}`;
-                                    this.contextManager.addContextItem(key, result.content);
-                                }
-                            }
-                        } catch (error: any) {
-                            if (onUpdate) onUpdate({ type: 'tool_end', id: call.id, tool: call.name, success: false, error: error.message });
-                            handleToolResult(this.context.history, { status: 'error', error: error.message }, call);
-                        }
-                    }
-                } else {
-                    pushHistory(this.context.history, { role: 'assistant', content: responseText });
-                    finalResponse = parsed.thought || responseText;
-                    break;
+                           // If the tool result contains new context, add it to master context
+                           if (result && typeof result === 'object' && result.content) {
+                               // Add to master context for future reference
+                               if (call.name === 'read_file') {
+                                   const filePath = call.parameters.path;
+                                   const key = `context_${filePath}`;
+                                   this.contextManager.addContextItem(key, result.content);
+                               }
+                           }
+                       } catch (error: any) {
+                           if (onUpdate) onUpdate({ type: 'tool_end', id: call.id, tool: call.name, success: false, error: error.message });
+                           handleToolResult(this.context.history, { status: 'error', error: error.message }, call);
+                       }
+                   }
+                   // After processing all tool calls, ensure role alternation
+                   this.conversationManager.ensureRoleAlternation();
+                   this.context.history = this.conversationManager.getHistory();
+                   console.log(`[VIBEY][Orchestrator] Tool calls processed, continuing loop to get next LLM response`);
+                   console.log(`[VIBEY][Orchestrator] Current history length: ${this.context.history.length}`);
+                   console.log(`[VIBEY][Orchestrator] Last 3 messages:`, this.context.history.slice(-3).map(m => ({ role: m.role, contentPreview: typeof m.content === 'string' ? m.content.substring(0, 100) : 'object' })));
+
+                   // Send update to UI showing we're continuing
+                   if (onUpdate) {
+                       onUpdate({
+                           type: 'info',
+                           message: `Tool execution complete. Continuing to process response... (iteration ${iterationCount}/${maxIterations})`
+                       });
+                   }
+                   // Continue the loop to get the next response from the LLM
+               } else {
+                   // No tool calls - this is a final response
+                   console.log(`[VIBEY][Orchestrator] ✅ DECISION: No tool calls found - treating as final response - BREAKING LOOP`);
+                   console.log(`[VIBEY][Orchestrator] Setting finalResponse to: ${parsed.thought ? 'parsed.thought' : 'responseText'}`);
+
+                   if (onUpdate) {
+                       onUpdate({
+                           type: 'info',
+                           message: `**[DEBUG]** No tool calls in response. Setting final response and exiting loop.\n\nFinal response preview: ${(parsed.thought || responseText).substring(0, 200)}...`
+                       });
+                   }
+
+                   this.conversationManager.addAssistantMessage(responseText);
+                   finalResponse = parsed.thought || responseText;
+                   console.log(`[VIBEY][Orchestrator] finalResponse set to: ${finalResponse.substring(0, 200)}...`);
+                   break;
+               }
+            }
+
+            // Check if we hit max iterations
+            if (iterationCount >= maxIterations && !finalResponse) {
+                const errorReport = `**ERROR: Maximum iterations reached**
+
+The agent reached the maximum number of iterations (${maxIterations}) without completing the task.
+
+**Last LLM Response:**
+\`\`\`
+${lastResponseText.substring(0, 1000)}
+\`\`\`
+
+**Conversation History (${this.context.history.length} messages):**
+${this.context.history.slice(-5).map((msg, idx) => `${idx + 1}. ${msg.role}: ${typeof msg.content === 'string' ? msg.content.substring(0, 200) : JSON.stringify(msg.content).substring(0, 200)}`).join('\n')}
+
+This suggests the agent is stuck in a loop. Please try rephrasing your request or breaking it into smaller tasks.`;
+
+                if (onUpdate) {
+                    onUpdate({
+                        type: 'error',
+                        message: errorReport
+                    });
                 }
+
+                return errorReport;
             }
             this.abortController = null;
+
+            console.log(`[VIBEY][Orchestrator] Main loop completed. finalResponse is: ${finalResponse ? 'SET' : 'NOT SET'}`);
             if (finalResponse) {
+                console.log(`[VIBEY][Orchestrator] finalResponse length: ${finalResponse.length} chars`);
+                console.log(`[VIBEY][Orchestrator] finalResponse preview: ${finalResponse.substring(0, 200)}...`);
+
                 // Add token summary if available
                 const metricsCollector = getMetricsCollector();
                 if (metricsCollector) {
                     // Get token summary for this conversation
                     const tokensSent = metricsCollector.getSummary('tokens_sent')?.currentValue || 0;
                     const tokensReceived = metricsCollector.getSummary('tokens_received')?.currentValue || 0;
-                    
+
                     if (onUpdate) {
                         onUpdate({
                             type: 'tokens',
@@ -388,30 +569,52 @@ ${summaryResponse}
                 }
                 return finalResponse;
             }
-            if (onUpdate) onUpdate({ type: 'thinking', message: 'Max turns reached. Summarizing progress...' });
-            pushHistory(this.context.history, {
-                role: 'user',
-                content: "You have reached the maximum number of turns. Please provide a concise summary of what you have accomplished so far, what issues you encountered, and what steps should be taken next to complete the task."
-            });
-            const summary = await callLLM(this.llm, this.context.history, signal);
-            pushHistory(this.context.history, { role: 'assistant', content: summary });
-            
-            // Add token summary if available
-            const metricsCollector = getMetricsCollector();
-            if (metricsCollector) {
-                const tokensSent = metricsCollector.getSummary('tokens_sent')?.currentValue || 0;
-                const tokensReceived = metricsCollector.getSummary('tokens_received')?.currentValue || 0;
-                
-                if (onUpdate) {
-                    onUpdate({
-                        type: 'tokens',
-                        sent: tokensSent,
-                        received: tokensReceived
-                    });
-                }
+            // If we get here, it means the loop was broken by a return statement
+            // This should not happen under normal circumstances, but we'll handle it gracefully
+            console.error('[VIBEY][Orchestrator] ❌ CRITICAL: Unexpected exit from main loop - no final response generated');
+            console.error('[VIBEY][Orchestrator] This indicates the LLM response was not properly handled');
+
+            // Get the last few messages for context
+            const recentHistory = this.context.history.slice(-3).map((msg, idx) => {
+                const content = typeof msg.content === 'string'
+                    ? msg.content.substring(0, 300)
+                    : JSON.stringify(msg.content).substring(0, 300);
+                return `Message ${idx + 1} (${msg.role}):\n${content}${content.length >= 300 ? '...' : ''}`;
+            }).join('\n\n');
+
+            // Report detailed error in the UI
+            const errorReport = `**CRITICAL ERROR: No response generated**
+
+The LLM response loop completed but no final response was set. This is a bug in the response handling logic.
+
+**Debug Information:**
+- Main loop completed without setting finalResponse
+- This typically means the LLM returned a response that wasn't properly parsed or handled
+
+**Last known state:**
+- History messages: ${this.context.history.length}
+- Last message role: ${this.context.history[this.context.history.length - 1]?.role || 'unknown'}
+
+**Last LLM Response (first 1000 chars):**
+\`\`\`
+${lastResponseText.substring(0, 1000)}${lastResponseText.length > 1000 ? '\n...(truncated)' : ''}
+\`\`\`
+
+**Recent Conversation History:**
+\`\`\`
+${recentHistory}
+\`\`\`
+
+This is a bug - the response should have been handled. Please report this with the above details.`;
+
+            if (onUpdate) {
+                onUpdate({
+                    type: 'error',
+                    message: errorReport
+                });
             }
-            
-            return `**Max Turns Reached (${MAX_TURNS})**\n\n${summary}`;
+
+            return errorReport;
         } catch (error: any) {
             this.abortController = null;
             const errorMsg = formatError(error);

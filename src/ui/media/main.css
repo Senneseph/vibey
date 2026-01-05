@@ -160,7 +160,7 @@ body.theme-light {
 /* Messages */
 .message {
     margin-bottom: 0;
-    padding: 8px 12px;
+    padding: 8px 8px;
     border-radius: 6px;
     max-width: 85%;
     word-wrap: break-word;
@@ -189,7 +189,7 @@ body.theme-light {
 .message.system-update {
     background: transparent;
     border: none;
-    padding: 4px 12px;
+    padding: 0px;
     font-size: 0.85em;
     color: var(--vscode-descriptionForeground);
     font-style: italic;
@@ -743,8 +743,8 @@ body.theme-light {
 .per-message-tokens {
     background: var(--vscode-textBlockQuote-background);
     border-left: 3px solid var(--vscode-notificationsInfoIcon-foreground);
-    padding: 8px 12px;
-    margin: 8px 0;
+    padding: 4px;
+    margin: 0;
     border-radius: 4px;
 }
 
@@ -762,4 +762,116 @@ body.theme-light {
 
 .context-condensed strong {
     color: var(--vscode-testing-iconPassed);
+}
+
+/* Marketplace View */
+#marketplace-view {
+    display: none;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    flex-direction: column;
+    overflow: hidden;
+    background-color: var(--vscode-editor-background);
+}
+
+#marketplace-view.active {
+    display: flex;
+    position: relative;
+}
+
+.marketplace-settings {
+    padding: 20px;
+    flex: 1;
+    overflow-y: auto;
+}
+
+.marketplace-settings h3 {
+    color: var(--vscode-panelTitle-activeForeground);
+    margin-bottom: 20px;
+    font-size: 18px;
+}
+
+.marketplace-controls {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.btn-primary {
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.btn-primary:hover {
+    background: var(--vscode-button-hoverBackground);
+}
+
+.btn-secondary {
+    background: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.btn-secondary:hover {
+    background: var(--vscode-button-secondaryHoverBackground);
+}
+
+.marketplace-info {
+    background: var(--vscode-editorWidget-background);
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 6px;
+    padding: 16px;
+    margin-top: 20px;
+}
+
+.marketplace-info p {
+    margin: 0 0 12px 0;
+    color: var(--vscode-descriptionForeground);
+}
+
+#marketplace-stats {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--vscode-panel-border);
+}
+
+.marketplace-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px;
+}
+
+.stat-item {
+    background: var(--vscode-badge-background);
+    padding: 12px;
+    border-radius: 4px;
+}
+
+.stat-label {
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+    text-transform: uppercase;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.stat-value {
+    font-size: 16px;
+    font-weight: bold;
+    color: var(--vscode-textLink-foreground);
 }

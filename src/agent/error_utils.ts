@@ -1,6 +1,18 @@
 // Error formatting and abort logic
+import * as vscode from 'vscode';
 export function formatError(error: any): string {
     if (!error) return 'Unknown error';
+    
+    // Check if the error has enhanced details
+    if (error.details) {
+        const details = error.details;
+        const errorMessage = `OpenAI API Error: ${error.message}\n\n`;
+        const historyMessage = `History: ${JSON.stringify(details.history, null, 2)}\n\n`;
+        const tokenUsageMessage = `Token Usage: ${JSON.stringify(details.tokenUsage, null, 2)}\n\n`;
+        const stackMessage = `Stack: ${details.stack}\n\n`;
+        
+        return errorMessage + historyMessage + tokenUsageMessage + stackMessage;
+    }
     
     // Handle OpenAI-compatible client errors specifically
     if (error.message && error.message.includes('OpenAI-Compatible API error')) {

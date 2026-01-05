@@ -17,6 +17,8 @@ import {
     McpEventListener,
     jsonSchemaToZod
 } from './types';
+import { MarketplaceManager, MarketplaceServerConfig } from '../../services/marketplace/MarketplaceManager';
+import { RemoteConfigLoader } from '../../services/marketplace/RemoteConfigLoader';
 
 export class McpService {
     private clients: Map<string, Client> = new Map();
@@ -25,24 +27,265 @@ export class McpService {
     private prompts: Map<string, McpPrompt[]> = new Map();
     private disposables: vscode.Disposable[] = [];
     private eventListeners: McpEventListener[] = [];
+    private marketplaceManager: MarketplaceManager;
+    private remoteConfigLoader: RemoteConfigLoader;
+    private marketplaceServers: MarketplaceServerConfig[] = [];
 
     constructor(
         private gateway: ToolGateway,
         private context: vscode.ExtensionContext
     ) {
+        this.marketplaceManager = new MarketplaceManager();
+        this.remoteConfigLoader = new RemoteConfigLoader();
+        
         // Watch for config changes
         this.disposables.push(
             vscode.workspace.onDidChangeConfiguration(e => {
-                if (e.affectsConfiguration('vibey.mcpServers')) {
+                if (e.affectsConfiguration('vibey.mcpServers') ||
+                    e.affectsConfiguration('vibey.mcpMarketplaceEnabled')) {
                     this.reloadServers();
                 }
             })
         );
     }
 
+    /**
+     * Get the built-in OpenSpec server configuration
+     */
+    private getBuiltInOpenSpecServerConfig(): McpServerConfig {
+        const openspecServerPath = this.context.asAbsolutePath('openspec-server/build/index.js');
+
+        // Filter out undefined values from process.env
+        const env: Record<string, string> = {
+            NODE_ENV: 'production'
+        };
+
+        for (const key in process.env) {
+            if (process.env[key]) {
+                env[key] = process.env[key] as string;
+            }
+        }
+
+        return {
+            command: process.execPath, // Use the current Node.js executable
+            args: [openspecServerPath],
+            env,
+            timeout: 10000,
+            autoReconnect: true
+        };
+    }
+
+    /**
+     * Get the built-in filesystem server configuration for testing
+     */
+    private getBuiltInFilesystemServerConfig(): McpServerConfig {
+        const filesystemServerPath = this.context.asAbsolutePath('src/agent/mcp/filesystem_mcp_server.js');
+
+        // Get workspace root - try to get from workspace folders, fall back to cwd
+        const workspaceRoot = vscode.workspace.workspaceFolders?.
+            [0]?.uri?.fsPath || process.cwd();
+
+        // Filter out undefined values from process.env
+        const env: Record<string, string> = {
+            NODE_ENV: 'production',
+            VIBEY_WORKSPACE_ROOT: workspaceRoot
+        };
+
+        for (const key in process.env) {
+            if (process.env[key]) {
+                env[key] = process.env[key] as string;
+            }
+        }
+
+        return {
+            command: process.execPath, // Use the current Node.js executable
+            args: [filesystemServerPath],
+            env,
+            timeout: 10000,
+            autoReconnect: true
+        };
+    }
+
+    /**
+     * Get context7 server configuration
+     */
+    private getContext7ServerConfig(): McpServerConfig {
+        // Filter out undefined values from process.env
+        const env: Record<string, string> = {
+            CONTEXT7_API_KEY: process.env.CONTEXT7_API_KEY || ''
+        };
+        
+        // Add other environment variables that are defined
+        for (const key in process.env) {
+            if (process.env[key]) {
+                env[key] = process.env[key] as string;
+            }
+        }
+        
+        return {
+            command: 'context7-server',
+            args: ['--mcp-mode'],
+            env,
+            timeout: 15000,
+            autoReconnect: true
+        };
+    }
+
+    /**
+     * Get sequentialthinking server configuration
+     */
+    private getSequentialThinkingServerConfig(): McpServerConfig {
+        // Filter out undefined values from process.env
+        const env: Record<string, string> = {};
+        
+        for (const key in process.env) {
+            if (process.env[key]) {
+                env[key] = process.env[key] as string;
+            }
+        }
+        
+        return {
+            command: 'sequentialthinking-server',
+            args: ['--mcp-mode'],
+            env,
+            timeout: 10000,
+            autoReconnect: true
+        };
+    }
+
+    /**
+     * Get memory server configuration
+     */
+    private getMemoryServerConfig(): McpServerConfig {
+        // Get workspace root for memory bank storage
+        const workspaceRoot = vscode.workspace.workspaceFolders?.
+            [0]?.uri?.fsPath || process.cwd();
+        const memoryBankPath = this.context.asAbsolutePath('.kilocode/rules/memory-bank/');
+        
+        // Filter out undefined values from process.env
+        const env: Record<string, string> = {
+            MEMORY_BANK_DIR: memoryBankPath
+        };
+        
+        for (const key in process.env) {
+            if (process.env[key]) {
+                env[key] = process.env[key] as string;
+            }
+        }
+        
+        return {
+            command: 'memory-server',
+            args: ['--mcp-mode', '--memory-dir', memoryBankPath],
+            env,
+            timeout: 10000,
+            autoReconnect: true
+        };
+    }
+
     /** Initialize and connect to configured servers */
     public async initialize(): Promise<void> {
-        await this.reloadServers();
+        console.log('[MCP] ========================================');
+        console.log('[MCP] Initializing MCP Service...');
+        console.log('[MCP] ========================================');
+
+        try {
+            // Clear any stale data from previous initialization
+            console.log('[MCP] Step 1: Cleaning up stale servers...');
+            await this.cleanupStaleServers();
+            console.log('[MCP] Step 1: Complete');
+
+            // Load marketplace servers if enabled
+            console.log('[MCP] Step 2: Loading marketplace servers...');
+            await this.loadMarketplaceServers();
+            console.log('[MCP] Step 2: Complete');
+
+            // Load and connect to servers
+            console.log('[MCP] Step 3: Reloading servers...');
+            await this.reloadServers();
+            console.log('[MCP] Step 3: Complete');
+
+            // Log final state
+            const finalStates = this.getServerStates();
+            console.log('[MCP] ========================================');
+            console.log('[MCP] Initialization complete. Server states:', JSON.stringify(finalStates, null, 2));
+            console.log('[MCP] ========================================');
+
+            if (finalStates.length === 0) {
+                console.error('[MCP] ❌ CRITICAL: No servers available after initialization!');
+                console.error('[MCP] This indicates a problem in reloadServers()');
+            } else {
+                const connected = finalStates.filter(s => s.status === 'connected');
+                const errors = finalStates.filter(s => s.status === 'error');
+                const connecting = finalStates.filter(s => s.status === 'connecting');
+
+                console.log(`[MCP] ✅ Total servers: ${finalStates.length}`);
+                console.log(`[MCP]    - Connected: ${connected.length}`);
+                console.log(`[MCP]    - Connecting: ${connecting.length}`);
+                console.log(`[MCP]    - Errors: ${errors.length}`);
+
+                if (errors.length > 0) {
+                    console.error(`[MCP] ${errors.length} server(s) failed to connect:`);
+                    errors.forEach(error => {
+                        console.error(`[MCP]    - ${error.name}: ${error.error}`);
+                    });
+                }
+            }
+        } catch (error: any) {
+            console.error('[MCP] ❌ FATAL ERROR during initialization:', error);
+            console.error('[MCP] Error stack:', error.stack);
+            throw error;
+        }
+    }
+
+    /** Load marketplace servers if marketplace is enabled */
+    private async loadMarketplaceServers(): Promise<void> {
+        const config = vscode.workspace.getConfiguration('vibey');
+        const marketplaceEnabled = config.get<boolean>('mcpMarketplaceEnabled', true);
+        
+        if (!marketplaceEnabled) {
+            console.log('[MCP] Marketplace integration is disabled');
+            return;
+        }
+        
+        try {
+            console.log('[MCP] Loading marketplace servers...');
+            this.marketplaceServers = await this.marketplaceManager.loadMarketplaceServers();
+            console.log(`[MCP] Loaded ${this.marketplaceServers.length} marketplace servers`);
+            
+            // Emit event for marketplace update
+            this.emitEvent({
+                type: 'marketplace-updated',
+                serverName: 'marketplace',
+                data: { count: this.marketplaceServers.length }
+            });
+            
+        } catch (error) {
+            console.error('[MCP] Failed to load marketplace servers:', error);
+            this.emitEvent({
+                type: 'marketplace-error',
+                serverName: 'marketplace',
+                data: { error: error instanceof Error ? error.message : 'Unknown error' }
+            });
+        }
+    }
+
+    /** Clean up stale server states and connections */
+    private async cleanupStaleServers(): Promise<void> {
+        console.log('[MCP] Cleaning up stale server data...');
+        
+        // Disconnect all existing servers
+        for (const name of this.clients.keys()) {
+            try {
+                await this.disconnectServer(name);
+            } catch (e) {
+                console.warn(`[MCP] Error cleaning up server ${name}:`, e);
+            }
+        }
+        
+        // Clear all state
+        this.serverStates.clear();
+        this.resources.clear();
+        this.prompts.clear();
     }
 
     /** Add an event listener */
@@ -171,10 +414,73 @@ export class McpService {
         const servers = config.get<Record<string, McpServerConfig>>('mcpServers') || {};
         const configuredNames = new Set(Object.keys(servers));
 
+        console.log('[MCP] Initial configured servers:', Object.keys(servers));
+
+        // Add marketplace servers if enabled
+        console.log('[MCP] About to call addMarketplaceServers...');
+        try {
+            await this.addMarketplaceServers(servers, configuredNames);
+            console.log('[MCP] addMarketplaceServers completed successfully');
+        } catch (error) {
+            console.error('[MCP] CRITICAL: addMarketplaceServers threw an error:', error);
+        }
+        console.log('[MCP] After marketplace servers:', Object.keys(servers));
+
+        // Always add built-in filesystem server unless explicitly disabled
+        const filesystemServerName = 'filesystem-builtin';
+        const disableFilesystem = config.get<boolean>('disableFilesystemServer', false);
+        console.log(`[MCP] Filesystem server - disabled: ${disableFilesystem}, already configured: ${configuredNames.has(filesystemServerName)}`);
+        if (!disableFilesystem && !configuredNames.has(filesystemServerName)) {
+            servers[filesystemServerName] = this.getBuiltInFilesystemServerConfig();
+            console.log(`[MCP] Added built-in filesystem server`);
+        }
+
+        // Always add built-in OpenSpec server unless explicitly disabled
+        const builtInServerName = 'openspec-builtin';
+        const disableOpenSpec = config.get<boolean>('disableOpenSpecServer', false);
+        console.log(`[MCP] OpenSpec server - disabled: ${disableOpenSpec}, already configured: ${configuredNames.has(builtInServerName)}`);
+        if (!disableOpenSpec && !configuredNames.has(builtInServerName)) {
+            servers[builtInServerName] = this.getBuiltInOpenSpecServerConfig();
+            console.log(`[MCP] Added built-in OpenSpec server`);
+        }
+
+        console.log('[MCP] Final server list to load:', Object.keys(servers));
+
+        // PRE-POPULATE server states BEFORE attempting connections
+        // This ensures tests can see configured servers immediately, even if connections are pending
+        for (const [name, serverConfig] of Object.entries(servers)) {
+            const existingState = this.serverStates.get(name);
+            if (!existingState) {
+                // Create initial state for new servers
+                this.updateServerState(name, {
+                    name,
+                    config: serverConfig,
+                    status: 'connecting',
+                    toolCount: 0,
+                    resourceCount: 0,
+                    promptCount: 0,
+                    registeredTools: []
+                });
+                console.log(`[MCP] Pre-registered server state for: ${name}`);
+            }
+        }
+
         // Disconnect servers that are no longer configured
         for (const name of this.clients.keys()) {
-            if (!configuredNames.has(name)) {
+            if (!configuredNames.has(name) && name !== builtInServerName && name !== filesystemServerName) {
                 await this.disconnectServer(name);
+            }
+        }
+
+        // Special handling for built-in servers that should always be connected
+        const alwaysOnServers = new Set([builtInServerName, filesystemServerName]);
+        for (const name of alwaysOnServers) {
+            if (!configuredNames.has(name) && !servers[name]) {
+                // This server should be connected but isn't in the config
+                // Disconnect it if it exists
+                if (this.clients.has(name)) {
+                    await this.disconnectServer(name);
+                }
             }
         }
 
@@ -185,7 +491,7 @@ export class McpService {
                 JSON.stringify(existingState.config) !== JSON.stringify(serverConfig);
 
             if (!existingState || configChanged) {
-                if (existingState) {
+                if (existingState && configChanged) {
                     await this.disconnectServer(name);
                 }
                 try {
@@ -205,6 +511,100 @@ export class McpService {
                 }
             }
         }
+    }
+
+    /** Add marketplace servers to the configuration if marketplace is enabled */
+    private async addMarketplaceServers(
+        servers: Record<string, McpServerConfig>,
+        configuredNames: Set<string>
+    ): Promise<void> {
+        try {
+            const config = vscode.workspace.getConfiguration('vibey');
+            const marketplaceEnabled = config.get<boolean>('mcpMarketplaceEnabled', true);
+
+            if (!marketplaceEnabled) {
+                console.log('[MCP] Marketplace is disabled');
+                return;
+            }
+
+            // Use cached marketplace servers (already loaded in initialize())
+            console.log(`[MCP] Using ${this.marketplaceServers.length} cached marketplace servers`);
+
+            // Add marketplace servers that aren't already configured
+            for (const marketplaceServer of this.marketplaceServers) {
+                if (!configuredNames.has(marketplaceServer.id)) {
+                    servers[marketplaceServer.id] = marketplaceServer.config;
+                    configuredNames.add(marketplaceServer.id);
+                    console.log(`[MCP] Added marketplace server: ${marketplaceServer.id}`);
+                }
+            }
+        } catch (error) {
+            console.error('[MCP] Error adding marketplace servers (continuing with built-in servers):', error);
+            // Don't throw - we want to continue with built-in servers even if marketplace fails
+        }
+    }
+
+    /** Get available marketplace servers */
+    public async getMarketplaceServers(): Promise<MarketplaceServerConfig[]> {
+        return this.marketplaceManager.getCachedServers();
+    }
+
+    /** Install a marketplace server by ID */
+    public async installMarketplaceServer(serverId: string): Promise<boolean> {
+        try {
+            const server = await this.marketplaceManager.getServerById(serverId);
+            if (!server) {
+                console.error(`[MCP] Marketplace server ${serverId} not found`);
+                return false;
+            }
+            
+            // Add to configuration
+            const config = vscode.workspace.getConfiguration('vibey');
+            const servers = config.get<Record<string, McpServerConfig>>('mcpServers') || {};
+            servers[serverId] = server.config;
+            
+            await config.update('mcpServers', servers, vscode.ConfigurationTarget.Global);
+            
+            // Reload servers to connect to the new one
+            await this.reloadServers();
+            
+            return true;
+        } catch (error) {
+            console.error(`[MCP] Failed to install marketplace server ${serverId}:`, error);
+            return false;
+        }
+    }
+
+    /** Uninstall a marketplace server by ID */
+    public async uninstallMarketplaceServer(serverId: string): Promise<boolean> {
+        try {
+            // Remove from configuration
+            const config = vscode.workspace.getConfiguration('vibey');
+            const servers = config.get<Record<string, McpServerConfig>>('mcpServers') || {};
+            
+            if (servers[serverId]) {
+                delete servers[serverId];
+                await config.update('mcpServers', servers, vscode.ConfigurationTarget.Global);
+                
+                // Disconnect the server
+                await this.disconnectServer(serverId);
+                
+                return true;
+            }
+            
+            return false;
+        } catch (error) {
+            console.error(`[MCP] Failed to uninstall marketplace server ${serverId}:`, error);
+            return false;
+        }
+    }
+
+    /** Refresh marketplace data */
+    public async refreshMarketplace(): Promise<void> {
+        console.log('[MCP] Refreshing marketplace data...');
+        this.marketplaceManager.clearCache();
+        await this.loadMarketplaceServers();
+        await this.reloadServers();
     }
 
 

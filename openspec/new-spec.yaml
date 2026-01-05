@@ -1,0 +1,9 @@
+openapi: 3.0.3
+info:
+  title: New OpenSpec API
+  version: 1.0.0
+description: Automatically generated OpenSpec specification via Filesystem MCP Server.
+paths: {}
+servers:
+  - url: http://localhost:3000
+    description: Local development server

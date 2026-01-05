@@ -39,7 +39,7 @@ export class OpenAICompatibleClient implements LLMProvider {
         try {
             console.log(`[VIBEY][OpenAI-Compatible] Testing connection to ${baseUrl}/models...`);
             const healthStart = Date.now();
-            const response = await fetch(`${baseUrl}/models`, { 
+            const response = await fetch(`${baseUrl}/models`, {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
@@ -62,6 +62,81 @@ export class OpenAICompatibleClient implements LLMProvider {
         }
     }
 
+    /**
+     * Formats messages for llama.cpp compatibility
+     * llama.cpp expects strict alternation between user and assistant roles after system message
+     * Tool messages need to be converted to user/assistant format
+     */
+    private formatMessagesForLlamaCpp(messages: ChatMessage[]): ChatMessage[] {
+        const formattedMessages: ChatMessage[] = [];
+         
+        // Always start with system message if present
+        const systemMessage = messages.find(m => m.role === 'system');
+        if (systemMessage) {
+            formattedMessages.push(systemMessage);
+        }
+         
+        // Process remaining messages, handling tool calls specially
+        let lastRole: 'user' | 'assistant' | null = null;
+         
+        for (const message of messages) {
+            if (message.role === 'system') continue; // Already handled
+             
+            if (message.role === 'tool') {
+                // Convert tool messages to user/assistant format for llama.cpp
+                // Tool results are always treated as user messages (as if user provided the result)
+                try {
+                    const toolData = typeof message.content === 'string'
+                        ? JSON.parse(message.content)
+                        : message.content;
+                     
+                    // Tool result - treat as user message with minimal formatting
+                    formattedMessages.push({
+                        role: 'user',
+                        content: `[Tool Result]: ${JSON.stringify(toolData)}`
+                    });
+                    lastRole = 'user';
+                } catch (error) {
+                    console.error(`[VIBEY][OpenAI-Compatible] ❌ Error parsing tool message:`, error);
+                    // If we can't parse, just add as user message with raw content
+                    formattedMessages.push({
+                        role: 'user',
+                        content: `[Tool Message]: ${message.content}`
+                    });
+                    lastRole = 'user';
+                }
+            } else {
+                // Regular user or assistant message
+                // Ensure proper alternation
+                if (lastRole === message.role) {
+                    // If we have consecutive same roles, this is a problem
+                    // For llama.cpp, we need to ensure alternation
+                    console.warn(`[VIBEY][OpenAI-Compatible] ⚠️  Detected consecutive ${message.role} messages - this may cause issues with llama.cpp`);
+                     
+                    // Try to fix the alternation by inserting a dummy message
+                    if (message.role === 'user') {
+                        formattedMessages.push({
+                            role: 'assistant',
+                            content: '[...]'
+                        });
+                        lastRole = 'assistant';
+                    } else {
+                        formattedMessages.push({
+                            role: 'user',
+                            content: '[...]'
+                        });
+                        lastRole = 'user';
+                    }
+                }
+                 
+                formattedMessages.push(message);
+                lastRole = message.role;
+            }
+        }
+         
+        return formattedMessages;
+    }
+
     async chat(messages: ChatMessage[], signal?: AbortSignal): Promise<string> {
         const { provider, modelName, baseUrl, apiKey } = this.getConfig();
         const startTime = Date.now();
@@ -70,13 +145,12 @@ export class OpenAICompatibleClient implements LLMProvider {
         const normalizedBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
         const chatEndpoint = `${normalizedBaseUrl}/chat/completions`;
 
+        // Format messages for llama.cpp compatibility
+        const formattedMessages = this.formatMessagesForLlamaCpp(messages);
+
         const payload = {
             model: modelName,
-            messages: messages.map(m => {
-                if (m.role === 'tool') {
-                    // Normalize tool role for models that support it
-                    return { role: 'tool', content: JSON.stringify(m.content) };
-                }
+            messages: formattedMessages.map(m => {
                 return {
                     role: m.role,
                     content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content)
@@ -87,13 +161,25 @@ export class OpenAICompatibleClient implements LLMProvider {
 
         // Log request details
         const payloadString = JSON.stringify(payload);
-        const totalTokens = payloadString.length / 4;
+        
+        // More accurate token estimation - count actual content tokens, not JSON overhead
+        let totalTokens = 0;
+        for (const msg of payload.messages) {
+            const content = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
+            // More accurate estimation: 1 token ≈ 3.5 characters for English text
+            totalTokens += Math.ceil(content.length / 3.5);
+        }
+        
         console.log(`[VIBEY][OpenAI-Compatible] Sending request to ${chatEndpoint}`);
         console.log(`[VIBEY][OpenAI-Compatible] Provider: ${provider}`);
         console.log(`[VIBEY][OpenAI-Compatible] Model: ${modelName}`);
-        console.log(`[VIBEY][OpenAI-Compatible] Messages: ${payload.messages.length}`);
-        console.log(`[VIBEY][OpenAI-Compatible] Estimated payload tokens: ~${Math.ceil(totalTokens)}`);
+        console.log(`[VIBEY][OpenAI-Compatible] Original messages: ${messages.length}, Formatted messages: ${payload.messages.length}`);
+        console.log(`[VIBEY][OpenAI-Compatible] Estimated content tokens: ~${Math.ceil(totalTokens)}`);
         console.log(`[VIBEY][OpenAI-Compatible] Payload size: ${payloadString.length} bytes`);
+        
+        // Log message roles for debugging
+        const roles = formattedMessages.map(m => m.role);
+        console.log(`[VIBEY][OpenAI-Compatible] Message roles: ${roles.join(' -> ')}`);
         
         // Log actual message content (truncated if too long)
         payload.messages.forEach((msg, idx) => {

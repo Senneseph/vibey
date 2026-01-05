@@ -21,28 +21,38 @@ describe('OpenSpec Integration Property Tests', () => {
   let mockContext: any;
 
   beforeEach(async () => {
-    // Clean up test workspace
-    await fs.remove(testWorkspace);
-    await fs.ensureDir(testWorkspace);
+      // Clean up test workspace
+      await fs.remove(testWorkspace);
+      await fs.ensureDir(testWorkspace);
 
-    // Create mock VS Code extension context
-    mockContext = {
-      subscriptions: [],
-      workspaceState: {
-        get: jest.fn(),
-        update: jest.fn()
-      },
-      globalState: {
-        get: jest.fn(),
-        update: jest.fn()
-      },
-      extensionPath: __dirname
-    };
+      // Create mock VS Code extension context
+      mockContext = {
+          subscriptions: [],
+          workspaceState: {
+              get: jest.fn(),
+              update: jest.fn()
+          },
+          globalState: {
+              get: jest.fn(),
+              update: jest.fn()
+          },
+          extensionPath: __dirname,
+          asAbsolutePath: (relativePath: string) => {
+              // Mock asAbsolutePath to resolve paths relative to the extension directory
+              // For OpenSpec server, we need to go up from src/test to the project root
+              if (relativePath === 'openspec-server/build/index.js') {
+                  return path.join(__dirname, '../../openspec-server/build/index.js');
+              }
+              return path.isAbsolute(relativePath)
+                  ? relativePath
+                  : path.join(__dirname, relativePath);
+          }
+      };
 
-    // Initialize components
-    const policy = new PolicyEngine(testWorkspace);
-    toolGateway = new ToolGateway(policy);
-    mcpService = new McpService(toolGateway, mockContext);
+      // Initialize components
+      const policy = new PolicyEngine(testWorkspace);
+      toolGateway = new ToolGateway(policy);
+      mcpService = new McpService(toolGateway, mockContext);
   });
 
   afterEach(async () => {

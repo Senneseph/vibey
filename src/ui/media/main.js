@@ -230,6 +230,9 @@ window.addEventListener('message', event => {
             setProcessing(false, false);
             updateSendButtonState();
             break;
+        case 'marketplaceStats':
+            updateMarketplaceStats(message.stats);
+            break;
     }
 });
 
@@ -248,6 +251,33 @@ if (document.readyState === 'loading') {
 const chatContainer = getChatContainer();
 if (chatContainer) {
     chatContainer.addEventListener('scroll', checkScrollPosition);
+}
+
+// Update marketplace stats display
+function updateMarketplaceStats(stats) {
+    const statsElement = document.getElementById('marketplace-stats');
+    if (statsElement) {
+        statsElement.innerHTML = `
+            <div class="marketplace-stats-grid">
+                <div class="stat-item">
+                    <div class="stat-label">Total Servers</div>
+                    <div class="stat-value">${stats.totalServers}</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Installed</div>
+                    <div class="stat-value">${stats.installedServers}</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Updates Available</div>
+                    <div class="stat-value">${stats.availableUpdates}</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Last Updated</div>
+                    <div class="stat-value">${stats.lastUpdated}</div>
+                </div>
+            </div>
+        `;
+    }
 }
 
 // Export scroll management functions for use in other modules
