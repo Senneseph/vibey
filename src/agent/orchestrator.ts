@@ -470,8 +470,10 @@ ${JSON.stringify(tokenUsage, null, 2)}
                            if (onUpdate) onUpdate({ type: 'tool_start', id: call.id, tool: call.name, parameters: call.parameters });
                            const result = await executeTool(this.tools, call);
                            if (onUpdate) onUpdate({ type: 'tool_end', id: call.id, tool: call.name, success: true, result });
-                           handleToolResult(this.context.history, result, call);
-                            
+                           
+                           // Add tool result to conversation manager
+                           this.conversationManager.addToolCallResult(call.id, result);
+                           
                            // If the tool result contains new context, add it to master context
                            if (result && typeof result === 'object' && result.content) {
                                // Add to master context for future reference
@@ -483,7 +485,9 @@ ${JSON.stringify(tokenUsage, null, 2)}
                            }
                        } catch (error: any) {
                            if (onUpdate) onUpdate({ type: 'tool_end', id: call.id, tool: call.name, success: false, error: error.message });
-                           handleToolResult(this.context.history, { status: 'error', error: error.message }, call);
+                           
+                           // Add error result to conversation manager
+                           this.conversationManager.addToolCallResult(call.id, { status: 'error', error: error.message });
                        }
                    }
                    // After processing all tool calls, ensure role alternation
@@ -505,16 +509,27 @@ ${JSON.stringify(tokenUsage, null, 2)}
                    // No tool calls - this is a final response
                    console.log(`[VIBEY][Orchestrator] ✅ DECISION: No tool calls found - treating as final response - BREAKING LOOP`);
                    console.log(`[VIBEY][Orchestrator] Setting finalResponse to: ${parsed.thought ? 'parsed.thought' : 'responseText'}`);
-
+   
                    if (onUpdate) {
                        onUpdate({
                            type: 'info',
                            message: `**[DEBUG]** No tool calls in response. Setting final response and exiting loop.\n\nFinal response preview: ${(parsed.thought || responseText).substring(0, 200)}...`
                        });
                    }
-
+   
                    this.conversationManager.addAssistantMessage(responseText);
                    finalResponse = parsed.thought || responseText;
+                   
+                   // Handle empty response case
+                   if (!finalResponse || finalResponse.trim() === '') {
+                       console.error(`[VIBEY][Orchestrator] ❌ Empty response received from LLM`);
+                       const errorMsg = '**ERROR: Empty response from LLM**\n\nThe LLM returned an empty response, which may indicate a parsing issue or incomplete generation.';
+                       if (onUpdate) {
+                           onUpdate({ type: 'error', message: errorMsg });
+                       }
+                       finalResponse = errorMsg;
+                   }
+                   
                    console.log(`[VIBEY][Orchestrator] finalResponse set to: ${finalResponse.substring(0, 200)}...`);
                    break;
                }

@@ -22,8 +22,16 @@ export class ConversationManager {
     }
 
     public addToolCallResult(toolCallId: string, result: any): void {
-        // Add the tool call result as a user message
-        this.history.push({ role: 'user', content: `Tool call result for ${toolCallId}: ${JSON.stringify(result)}` });
+        // Add the tool call result as a tool message
+        const toolMessage = `🔧 Tool Result: ${toolCallId}
+
+${result.status === 'success' ? '✅ Success' : '❌ Error'}
+
+${result.output ? `Output:\n${result.output}` : ''}
+${result.error ? `Error:\n${result.error}` : ''}`;
+        
+        this.history.push({ role: 'tool', content: toolMessage });
+        console.log(`[VIBEY][ConversationManager] Added tool result for ${toolCallId}`);
     }
 
     public clearHistory(): void {
@@ -38,6 +46,7 @@ export class ConversationManager {
     public ensureRoleAlternation(): void {
         // Ensure the conversation roles alternate correctly
         const lastRole = this.getLastMessageRole();
+        
         if (lastRole === 'assistant') {
             // Check if the last assistant message contains tool calls
             const lastMessage = this.history[this.history.length - 1];
@@ -49,6 +58,10 @@ export class ConversationManager {
                     this.history.push({ role: 'user', content: 'Continue with the next step.' });
                 }
             }
+        } else if (lastRole === 'tool') {
+            // After a tool result, we need an assistant response
+            // No need to add anything - the LLM will provide the assistant response
+            console.log(`[VIBEY][ConversationManager] Tool result added, waiting for assistant response`);
         }
     }
 

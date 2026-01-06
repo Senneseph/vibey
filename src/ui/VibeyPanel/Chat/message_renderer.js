@@ -173,7 +173,7 @@ function renderMessage(role, content, timestamp = null) {
             if (parsed.thought) {
                 const thoughtDiv = document.createElement('div');
                 thoughtDiv.className = 'message system-update';
-                thoughtDiv.innerHTML = `<details closed><summary>Thinking Plan</summary>${parsed.thought}</details>`;
+                thoughtDiv.innerHTML = `<details open><summary>Thinking Plan</summary>${parsed.thought}</details>`;
                 messageContent.appendChild(thoughtDiv);
             }
 
@@ -282,7 +282,7 @@ function handleAgentUpdate(update) {
             div.innerHTML = `<em>🤔 ${update.message}</em>`;
             break;
         case 'thought':
-            div.innerHTML = `<details closed><summary>Thinking Plan</summary>${update.message}</details>`;
+            div.innerHTML = `<details open><summary>Thinking Plan</summary>${update.message}</details>`;
             break;
         case 'contextAdded':
             // Display context information
