@@ -445,6 +445,7 @@ export class McpService {
         }
 
         console.log('[MCP] Final server list to load:', Object.keys(servers));
+        console.log('[MCP] Final server configurations:', JSON.stringify(servers, null, 2));
 
         // PRE-POPULATE server states BEFORE attempting connections
         // This ensures tests can see configured servers immediately, even if connections are pending
@@ -530,14 +531,48 @@ export class McpService {
             // Use cached marketplace servers (already loaded in initialize())
             console.log(`[MCP] Using ${this.marketplaceServers.length} cached marketplace servers`);
 
+            // Debug: Log initial state
+            console.log(`[MCP] DEBUG: Initial servers: ${JSON.stringify(Object.keys(servers))}`);
+            console.log(`[MCP] DEBUG: Initial configuredNames: ${JSON.stringify(Array.from(configuredNames))}`);
+            console.log(`[MCP] DEBUG: Marketplace servers to add: ${this.marketplaceServers.length}`);
+
             // Add marketplace servers that aren't already configured
             for (const marketplaceServer of this.marketplaceServers) {
+                console.log(`[MCP] DEBUG: Processing marketplace server: ${marketplaceServer.id}`);
+                console.log(`[MCP] DEBUG: Already configured? ${configuredNames.has(marketplaceServer.id)}`);
+                
                 if (!configuredNames.has(marketplaceServer.id)) {
-                    servers[marketplaceServer.id] = marketplaceServer.config;
+                    // Use built-in configurations for known servers if available
+                    let serverConfig: McpServerConfig;
+                    switch (marketplaceServer.id) {
+                        case 'context7':
+                            serverConfig = this.getContext7ServerConfig();
+                            break;
+                        case 'sequentialthinking':
+                            serverConfig = this.getSequentialThinkingServerConfig();
+                            break;
+                        case 'memory':
+                            serverConfig = this.getMemoryServerConfig();
+                            break;
+                        default:
+                            serverConfig = marketplaceServer.config;
+                    }
+                    
+                    console.log(`[MCP] DEBUG: Adding server ${marketplaceServer.id} with config:`, serverConfig);
+                    servers[marketplaceServer.id] = serverConfig;
                     configuredNames.add(marketplaceServer.id);
                     console.log(`[MCP] Added marketplace server: ${marketplaceServer.id}`);
+                    
+                    // Debug: Verify the server was added
+                    console.log(`[MCP] DEBUG: Server ${marketplaceServer.id} added? ${marketplaceServer.id in servers}`);
+                    console.log(`[MCP] DEBUG: Current servers: ${JSON.stringify(Object.keys(servers))}`);
                 }
             }
+            
+            // Debug: Log the current state of servers after adding marketplace servers
+            console.log(`[MCP] Servers after adding marketplace: ${JSON.stringify(Object.keys(servers))}`);
+            console.log(`[MCP] Configured names after adding marketplace: ${JSON.stringify(Array.from(configuredNames))}`);
+            console.log(`[MCP] DEBUG: Full servers object:`, JSON.stringify(servers, null, 2));
         } catch (error) {
             console.error('[MCP] Error adding marketplace servers (continuing with built-in servers):', error);
             // Don't throw - we want to continue with built-in servers even if marketplace fails

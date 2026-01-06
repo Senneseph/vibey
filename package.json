@@ -235,10 +235,11 @@
         }
     },
     "scripts": {
-        "vscode:prepublish": "npm run esbuild-base -- --minify",
+        "vscode:prepublish": "npm run copy-webview-resources && npm run esbuild-base -- --minify",
         "esbuild-base": "esbuild ./src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node",
-        "esbuild": "npm run esbuild-base -- --sourcemap",
-        "esbuild-watch": "npm run esbuild-base -- --sourcemap --watch",
+        "esbuild": "npm run copy-webview-resources && npm run esbuild-base -- --sourcemap",
+        "esbuild-watch": "npm run copy-webview-resources && npm run esbuild-base -- --sourcemap --watch",
+        "copy-webview-resources": "node scripts/copy-webview-resources.js",
         "compile": "tsc -p ./",
         "watch": "tsc -watch -p ./",
         "pretest": "npm run compile",
@@ -246,7 +247,7 @@
         "test": "jest",
         "test:watch": "jest --watch",
         "test:coverage": "jest --coverage",
-        "package": "vsce package"
+        "package": "npm run copy-webview-resources && vsce package"
     },
     "devDependencies": {
         "@types/fs-extra": "^11.0.4",

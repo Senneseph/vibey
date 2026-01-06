@@ -89,10 +89,10 @@ export class McpMarketplaceView {
      */
     private getWebviewContent(): string {
         const scriptUri = this.panel?.webview.asWebviewUri(
-            vscode.Uri.joinPath(this.context.extensionUri, 'media', 'marketplace.js')
+            vscode.Uri.joinPath(this.context.extensionUri, 'src', 'ui', 'MCP-Marketplace', 'marketplace.js')
         );
         const styleUri = this.panel?.webview.asWebviewUri(
-            vscode.Uri.joinPath(this.context.extensionUri, 'media', 'marketplace.css')
+            vscode.Uri.joinPath(this.context.extensionUri, 'src', 'ui', 'MCP-Marketplace', 'marketplace.css')
         );
 
         return `<!DOCTYPE html>

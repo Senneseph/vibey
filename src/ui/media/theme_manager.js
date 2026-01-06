@@ -1,4 +1,4 @@
-import { vscode } from './vscode_api.js';
+import { vscode } from '../vscode_api.js';
 
 // Detect and apply theme
 function applyTheme() {

@@ -11,7 +11,7 @@ import { createPatchTools } from './tools/definitions/patch';
 
 import { createManageTaskTool } from './tools/definitions/tasks';
 import { TaskManager } from './agent/task_manager';
-import { ChatPanel } from './ui/ChatPanel';
+import { ChatPanel } from './ui/VibeyPanel/ChatPanel';
 
 import { VibeyTerminalManager } from './agent/terminal';
 import { createTerminalTools } from './tools/definitions/terminal';
@@ -23,7 +23,7 @@ import { createSearchTools } from './tools/definitions/search';
 import { createMcpTools } from './tools/definitions/mcp';
 import { ContextManager } from './agent/context_manager';
 import { FeatureTestRunner, FeatureTestReport } from './agent/testing/test_runner';
-import { McpMarketplaceView } from './ui/marketplace/McpMarketplaceView';
+import { McpMarketplaceView } from './ui/MCP-Marketplace/McpMarketplaceView';
 import { MemoryService } from './agent/mcp/memory_service';
 
 // Module-level references for cleanup

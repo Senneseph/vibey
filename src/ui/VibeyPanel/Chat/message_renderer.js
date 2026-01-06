@@ -1,9 +1,40 @@
-import { vscode } from './vscode_api.js';
+// import { vscode } from '../../vscode_api.js';
 import { getChatContainer } from './chat_manager.js';
 import { marked } from 'https://esm.sh/marked@12.0.0';
 
 // Export functions and variables for use in other modules
 export { getFullDateTime, toggleTimestampDisplay, getTimestampDisplayMode };
+
+// Debug message buffer for bundling consecutive DEBUG messages
+let debugMessageBuffer = [];
+let debugMessageTimeout = null;
+
+// Function to flush debug message buffer and create bundled display
+function flushDebugMessages() {
+    if (debugMessageBuffer.length === 0) return;
+
+    const div = document.createElement('div');
+    div.className = 'message system-update debug';
+    
+    // Create bundled debug message display
+    const debugContent = debugMessageBuffer.map(msg => msg).join('\n\n');
+    div.innerHTML = `
+        <div class="debug-message-container">
+            <details>
+                <summary>(${debugMessageBuffer.length})</summary>
+                <div class="debug-content">
+                    <pre>${debugContent}</pre>
+                </div>
+            </details>
+        </div>
+    `;
+    
+    getChatContainer().appendChild(div);
+    getChatContainer().scrollTop = getChatContainer().scrollHeight;
+    
+    // Clear buffer
+    debugMessageBuffer = [];
+}
 
 // Helper to format tool parameters nicely
 function formatToolParams(name, params) {
@@ -392,23 +423,59 @@ function handleAgentUpdate(update) {
             }
             return;
         case 'info':
-            // Display info messages
+            // Check if this is a DEBUG message
+            if (update.message && update.message.includes('[DEBUG]')) {
+                // Add to debug message buffer
+                debugMessageBuffer.push(update.message);
+                
+                // Clear any existing timeout
+                if (debugMessageTimeout) {
+                    clearTimeout(debugMessageTimeout);
+                }
+                
+                // Set timeout to flush messages after a short delay (500ms)
+                debugMessageTimeout = setTimeout(flushDebugMessages, 500);
+                
+                // Don't display individual debug messages, they'll be bundled
+                return;
+            }
+            
+            // Regular info messages (non-DEBUG)
             div.className = 'message system-update info';
-            div.innerHTML = `<div style="background: #e3f2fd; padding: 10px; border-left: 3px solid #2196f3; margin: 5px 0;">${marked.parse(update.message || '')}</div>`;
+            div.innerHTML = `<div class="info-text">${marked.parse(update.message || '')}</div>`;
             break;
         case 'error':
-            // Display error messages
+            // Display error messages as expandable emoji section
             div.className = 'message system-update error';
-            div.innerHTML = `<div style="background: #ffebee; padding: 10px; border-left: 3px solid #f44336; margin: 5px 0;">${marked.parse(update.message || '')}</div>`;
+            div.innerHTML = `
+                <div class="error-message">
+                    <details>
+                        <summary>❌ Error</summary>
+                        <div class="error-text">
+                            ${marked.parse(update.message || '')}
+                        </div>
+                    </details>
+                </div>
+            `;
             break;
         case 'warning':
             // Display warning messages
             div.className = 'message system-update warning';
-            div.innerHTML = `<div style="background: #fff3e0; padding: 10px; border-left: 3px solid #ff9800; margin: 5px 0;">${marked.parse(update.message || '')}</div>`;
+            div.innerHTML = `<div>${marked.parse(update.message || '')}</div>`;
             break;
     }
-    getChatContainer().appendChild(div);
-    getChatContainer().scrollTop = getChatContainer().scrollHeight;
+    
+    // Only append div if it was created (not for debug messages that get bundled)
+    if (div) {
+        // Flush any pending debug messages BEFORE appending the current message
+        // This ensures debug messages appear in the correct chronological order
+        if (debugMessageBuffer.length > 0) {
+            flushDebugMessages();
+        }
+        
+        getChatContainer().appendChild(div);
+        getChatContainer().scrollTop = getChatContainer().scrollHeight;
+    }
 }
 
 // Export for use in other modules

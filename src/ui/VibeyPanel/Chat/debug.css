@@ -1,0 +1,67 @@
+/* Debug Message Styling - VS Code Theme Compatible */
+
+/* Debug message container - uses VS Code info colors */
+.debug-message-container {
+    background: var(--vscode-textBlockQuote-background);
+    padding: 10px;
+    border-left: 3px solid var(--vscode-notificationsInfoIcon-foreground);
+    margin: 5px 0;
+    border-radius: 4px;
+}
+
+/* Debug details - expandable section */
+.debug-message-container details {
+    cursor: pointer;
+}
+
+/* Debug summary - header with info icon */
+.debug-message-container summary {
+    font-weight: bold;
+    color: var(--vscode-notificationsInfoIcon-foreground);
+    font-size: 1.1em;
+    list-style: none; /* Remove default marker */
+    cursor: pointer;
+}
+
+.debug-message-container summary::before {
+    margin-right: 8px;
+    font-size: 1.2em;
+}
+
+/* Open state styling */
+.debug-message-container details[open] summary {
+    margin-bottom: 8px;
+}
+
+/* Debug content container */
+.debug-message-container .debug-content {
+    margin-top: 8px;
+    padding-left: 5px;
+    border-left: 2px solid var(--vscode-focusBorder);
+    margin-left: 24px; /* Align with emoji */
+    max-height: 300px;
+    overflow-y: auto;
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 4px;
+    padding: 8px;
+}
+
+/* Debug preformatted text */
+.debug-message-container .debug-content pre {
+    margin: 0;
+    font-family: var(--vscode-editor-font-family);
+    white-space: pre-wrap;
+    font-size: 0.9em;
+    background: transparent;
+    border: none;
+    padding: 0;
+}
+
+/* Hover effects for better interactivity */
+.debug-message-container summary:hover {
+    text-decoration: underline;
+}
+
+.debug-message-container details:hover {
+    background: rgba(0, 0, 0, 0.02);
+}

@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeAll, afterAll } from '@jest/globals';
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { McpMarketplaceView } from '../ui/marketplace/McpMarketplaceView';
+import { McpMarketplaceView } from '../ui/MCP-Marketplace/McpMarketplaceView';
 
 describe('MCP Marketplace UI Integration Tests', () => {
     let mockContext: any;

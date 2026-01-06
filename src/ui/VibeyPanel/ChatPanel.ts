@@ -1,14 +1,12 @@
 import * as vscode from 'vscode';
-import { AgentOrchestrator } from '../agent/orchestrator';
-
-import { TaskManager } from '../agent/task_manager';
-import { DailyHistoryManager } from '../agent/daily_history_manager';
+import { AgentOrchestrator } from '../../agent/orchestrator';
+import { TaskManager } from '../../agent/task_manager';
+import { DailyHistoryManager } from '../../agent/daily_history_manager';
 
 export class ChatPanel implements vscode.WebviewViewProvider {
 
     public static readonly viewType = 'vibey.chatView';
     private _view?: vscode.WebviewView;
-
 
     private currentHistory: { role: string; content: string; agentUpdates?: any[] }[] = [];
     private isGenerating: boolean = false;
@@ -326,27 +324,29 @@ export class ChatPanel implements vscode.WebviewViewProvider {
     }
 
     private _getHtmlForWebview(webview: vscode.Webview) {
-        const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'src', 'ui', 'media', 'main.js'));
-        const toolkitUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'node_modules', '@vscode', 'webview-ui-toolkit', 'dist', 'toolkit.min.js'));
-        
+        const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'src', 'ui', 'VibeyPanel', 'main.js'));
+        const toolkitUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'src', 'ui', 'webview-ui-toolkit', 'toolkit.min.js'));
+          
         return `<!DOCTYPE html>
         <html lang="en">
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>Vibey Chat</title>
-            <link rel="stylesheet" href="${webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'src', 'ui', 'media', 'base.css'))}">
-            <link rel="stylesheet" href="${webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'src', 'ui', 'media', 'tabs.css'))}">
-            <link rel="stylesheet" href="${webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'src', 'ui', 'media', 'chat.css'))}">
-            <link rel="stylesheet" href="${webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'src', 'ui', 'media', 'tasks.css'))}">
+            <link rel="stylesheet" href="${webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'src', 'ui', 'VibeyPanel', 'base.css'))}">
+            <link rel="stylesheet" href="${webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'src', 'ui', 'VibeyPanel', 'tabs.css'))}">
+            <link rel="stylesheet" href="${webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'src', 'ui', 'VibeyPanel', 'Chat', 'chat.css'))}">
+            <link rel="stylesheet" href="${webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'src', 'ui', 'VibeyPanel', 'Chat', 'debug.css'))}">
+            <link rel="stylesheet" href="${webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'src', 'ui', 'VibeyPanel', 'Tasks', 'tasks.css'))}">
             <script type="module" src="${toolkitUri}"></script>
+            <script src="${webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'src', 'ui', 'vscode_api.js'))}"></script>
         </head>
         <body>
             <div class="tabs" role="tablist">
                 <button id="chat-tab" class="tab active" role="tab" aria-controls="chat-view" aria-selected="true">Chat</button>
                 <button id="tasks-tab" class="tab" role="tab" aria-controls="tasks-view" aria-selected="false">Tasks</button>
             </div>
-
+        
             <div class="views-container">
                 <div id="chat-view" class="view active" role="tabpanel" aria-labelledby="chat-tab">
                     <div id="chat-container"></div>

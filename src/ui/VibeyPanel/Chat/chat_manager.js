@@ -1,4 +1,4 @@
-import { vscode } from './vscode_api.js';
+import { vscode } from '../../vscode_api.js';
 
 // DOM elements - lazy loaded to avoid null references
 let chatContainer = null;

@@ -1,9 +1,9 @@
 // Main entry point that imports and initializes all modules
 
 // Import all modules
-import { vscode } from './vscode_api.js';
+import { vscode } from '../vscode_api.js';
 import { applyTheme, initThemeManager } from './theme_manager.js';
-import { renderMessage, handleAgentUpdate, getFullDateTime, toggleTimestampDisplay, getTimestampDisplayMode } from './message_renderer.js';
+import { renderMessage, handleAgentUpdate, getFullDateTime, toggleTimestampDisplay, getTimestampDisplayMode } from './Chat/message_renderer.js';
 import {
     initializeDOMElements,
     getChatContainer,
@@ -15,12 +15,12 @@ import {
     renderContext,
     getInputBoxValue,
     setInputBoxValue
-} from './chat_manager.js';
+} from './Chat/chat_manager.js';
 import {
     allTasks,
     setAllTasks,
     filterAndRenderTasks
-} from './task_manager.js';
+} from './Tasks/task_manager.js';
 import {
     setupTabs,
     setupKeyboardShortcuts,
@@ -56,7 +56,6 @@ function initializeToolkitComponents() {
         }
     }, 100);
 }
-
 
 // Global error handler
 window.onerror = function (message, source, lineno, colno, error) {

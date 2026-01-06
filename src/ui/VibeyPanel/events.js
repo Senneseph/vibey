@@ -1,10 +1,10 @@
-import { vscode } from './vscode_api.js';
+import { vscode } from '../vscode_api.js';
 import {
     handleSendClick,
     updateSendButtonState,
     getIsProcessing,
     getInputBox
-} from './chat_manager.js';
+} from './Chat/chat_manager.js';
 import {
     saveChatScrollPosition,
     restoreChatScrollPosition,
