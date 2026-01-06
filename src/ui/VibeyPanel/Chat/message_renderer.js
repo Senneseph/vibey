@@ -21,9 +21,9 @@ function flushDebugMessages() {
     div.innerHTML = `
         <div class="debug-message-container">
             <details>
-                <summary>(${debugMessageBuffer.length})</summary>
+                <summary>ℹ️ (${debugMessageBuffer.length})</summary>
                 <div class="debug-content">
-                    <pre>${debugContent}</pre>
+                    <pre style="worwrap: break-word">${debugContent}</pre>
                 </div>
             </details>
         </div>
@@ -216,7 +216,7 @@ function renderMessage(role, content, timestamp = null) {
             '<details open class="thought-block"><summary>Thinking...</summary><pre>$1</pre></details>');
     } else {
         // Formatting for code blocks
-        if (!content.includes('<pre>')) {
+        if (!content.includes('<pre')) {
             messageContent.innerHTML = content
                 .replace(/\n/g, '<br>')
                 .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
@@ -282,7 +282,7 @@ function handleAgentUpdate(update) {
             div.innerHTML = `<em>🤔 ${update.message}</em>`;
             break;
         case 'thought':
-            div.innerHTML = `<details closed><summary>Thinking Plan</summary><pre>${update.message}</pre></details>`;
+            div.innerHTML = `<details closed><summary>Thinking Plan</summary>${update.message}</details>`;
             break;
         case 'contextAdded':
             // Display context information

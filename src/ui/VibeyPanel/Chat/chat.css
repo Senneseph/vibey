@@ -30,6 +30,8 @@
     background: --var(--vscode-editor-background);
     padding: 5px;
     border-left: 3px solid #f44336;
+    border-left: 3px solid var(--vscode-notificationsErrorIcon-foreground);
+    border-radius: 4px;
     margin: 0px;
 }
 
@@ -50,10 +52,11 @@
 }
 
 .info-text {
-    background: #e3f2fd;
+    background: var(--vscode-editor-background);
     padding: 10px;
     border-left: 3px solid #2196f3;
     margin: 5px 0;
+    border-radius: 6px;
 }
 
 .warning-text {
@@ -66,7 +69,6 @@
 /* Message Wrapper with Metadata */
 .message-wrapper {
     margin-bottom: 12px;
-    margin-left: 5px;
     animation: fadeIn 0.3s ease;
 }
 
@@ -144,9 +146,9 @@
     border-radius: 4px;
     font-style: normal;
     margin-top: 4px;
-    width: 100%;
+    width: stretch;
     word-wrap: break-word;
-    white-space: pre-wrap;
+    /* white-space: pre-wrap; */
 }
 
 /* Tool Calls (Unified) */
@@ -157,6 +159,7 @@
     padding: 0;
     overflow: hidden;
     word-wrap: break-word;
+    margin-top: 4px;
 }
 
 .message.tool-call.running {
@@ -366,6 +369,9 @@ textarea.input-box {
 }
 
 /* Debug message styling with expandable emoji */
+.message.system-update.debug {
+    margin-top: 3px;
+}
 .message.system-update.debug details {
     cursor: pointer;
 }
@@ -403,6 +409,12 @@ textarea.input-box {
 }
 
 /* Error message styling with expandable emoji */
+.message.system-update.error {
+    background: var(--vscode-editor-inactiveSelectionBackground);
+    border-radius: 6px;
+    margin-top: 3px;
+}
+
 .message.system-update.error details {
     cursor: pointer;
 }
@@ -427,5 +439,5 @@ textarea.input-box {
     margin-top: 8px;
     padding-left: 5px;
     border-left: 2px solid #ef9a9a;
-    margin-left: 24px; /* Align with emoji */
+    margin-left: 8px; /* Align with emoji */
 }

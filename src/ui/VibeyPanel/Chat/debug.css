@@ -3,9 +3,9 @@
 /* Debug message container - uses VS Code info colors */
 .debug-message-container {
     background: var(--vscode-textBlockQuote-background);
-    padding: 10px;
+    padding: 5px;
     border-left: 3px solid var(--vscode-notificationsInfoIcon-foreground);
-    margin: 5px 0;
+    margin-top: 3px;
     border-radius: 4px;
 }
 
@@ -58,10 +58,6 @@
 }
 
 /* Hover effects for better interactivity */
-.debug-message-container summary:hover {
-    text-decoration: underline;
-}
-
 .debug-message-container details:hover {
     background: rgba(0, 0, 0, 0.02);
 }
