@@ -295,4 +295,15 @@ export class MetricsCollector {
         this.snapshots = [];
         this.saveState();
     }
+
+    /**
+     * Reset token-related metrics to start fresh tracking
+     */
+    resetTokenMetrics(): void {
+        // Remove all token-related data points
+        this.dataPoints = this.dataPoints.filter(
+            p => p.metricId !== 'tokens_sent' && p.metricId !== 'tokens_received'
+        );
+        this.saveState();
+    }
 }

@@ -137,7 +137,14 @@ export class OpenAICompatibleClient implements LLMProvider {
         return formattedMessages;
     }
 
-    async chat(messages: ChatMessage[], signal?: AbortSignal): Promise<string> {
+    async chat(messages: ChatMessage[], signal?: AbortSignal): Promise<{
+        content: string;
+        usage?: {
+            prompt_tokens: number;
+            completion_tokens: number;
+            total_tokens: number;
+        };
+    }> {
         const { provider, modelName, baseUrl, apiKey } = this.getConfig();
         const startTime = Date.now();
 
@@ -289,13 +296,17 @@ export class OpenAICompatibleClient implements LLMProvider {
                 console.log(`[VIBEY][OpenAI-Compatible] Response parsed in ${parseElapsed}ms (total fetch: ${responseElapsed}ms, total: ${totalElapsedFinal}ms)`);
                 
                 // Track token usage
-                const metricsCollector = getMetricsCollector();
-                if (metricsCollector && data.usage) {
-                    metricsCollector.record('tokens_sent', data.usage.prompt_tokens);
-                    metricsCollector.record('tokens_received', data.usage.completion_tokens);
-                }
+               const metricsCollector = getMetricsCollector();
+               if (metricsCollector && data.usage) {
+                   metricsCollector.record('tokens_sent', data.usage.prompt_tokens);
+                   metricsCollector.record('tokens_received', data.usage.completion_tokens);
+               }
 
-                return data.choices[0].message.content;
+               // Return both the response content and token usage data
+               return {
+                   content: data.choices[0].message.content,
+                   usage: data.usage
+               };
 
             } catch (error: any) {
                 lastError = error;

@@ -35,22 +35,40 @@ export class TokenManager {
     }
 
     /**
-     * Estimate tokens from text (rough approximation: 1 token ≈ 4 characters)
+     * Get token count from the LLM server for accurate tracking
      */
-    estimateTokens(text: string): number {
-        return Math.ceil(text.length / 4);
+    async getTokenCountFromLLM(text: string): Promise<number> {
+        // This method should be implemented to call the LLM server and retrieve the token count
+        // For now, we'll return a placeholder value
+        console.log(`[VIBEY][TokenManager] Retrieving token count from LLM server for text of length ${text.length}`);
+        return Math.ceil(text.length / 4); // Placeholder until LLM integration is complete
     }
 
     /**
-     * Calculate token usage breakdown
+     * Update token usage based on LLM server response
      */
-    calculateUsage(systemPrompt: string, context: string, userMessage: string, toolResults: string = ''): TokenUsage {
+    async updateTokenUsageFromLLMResponse(usage: { prompt_tokens: number; completion_tokens: number; total_tokens: number }): Promise<void> {
+        console.log(`[VIBEY][TokenManager] Updating token usage from LLM response:`, usage);
+        // This method will be used to update the token usage based on the LLM server response
+    }
+
+    /**
+     * Calculate token usage breakdown using LLM server token counts
+     */
+    async calculateUsage(systemPrompt: string, context: string, userMessage: string, toolResults: string = ''): Promise<TokenUsage> {
+        const [systemPromptTokens, contextTokens, userMessageTokens, toolResultsTokens] = await Promise.all([
+            this.getTokenCountFromLLM(systemPrompt),
+            this.getTokenCountFromLLM(context),
+            this.getTokenCountFromLLM(userMessage),
+            this.getTokenCountFromLLM(toolResults)
+        ]);
+        
         return {
-            systemPrompt: this.estimateTokens(systemPrompt),
-            context: this.estimateTokens(context),
-            userMessage: this.estimateTokens(userMessage),
-            toolResults: this.estimateTokens(toolResults),
-            total: this.estimateTokens(systemPrompt + context + userMessage + toolResults)
+            systemPrompt: systemPromptTokens,
+            context: contextTokens,
+            userMessage: userMessageTokens,
+            toolResults: toolResultsTokens,
+            total: systemPromptTokens + contextTokens + userMessageTokens + toolResultsTokens
         };
     }
 
@@ -95,41 +113,41 @@ export class TokenManager {
     /**
      * Truncate context to fit within limits, keeping most recent items
      */
-    truncateContext(fullContext: string, systemPromptTokens: number, userMessageTokens: number, maxContextTokens?: number): {
+    async truncateContext(fullContext: string, systemPromptTokens: number, userMessageTokens: number, maxContextTokens?: number): Promise<{
         truncated: string;
         wasExceeded: boolean;
         removedTokens: number;
-    } {
+    }> {
         const maxContext = maxContextTokens || this.calculateMaxContextSize(systemPromptTokens, userMessageTokens);
-        const currentContextTokens = this.estimateTokens(fullContext);
-        
+        const currentContextTokens = await this.getTokenCountFromLLM(fullContext);
+         
         if (currentContextTokens <= maxContext) {
             return { truncated: fullContext, wasExceeded: false, removedTokens: 0 };
         }
-
+ 
         // Try to remove oldest/least important context while keeping structure
         const lines = fullContext.split('\n');
         let truncated = fullContext;
         let removedTokens = currentContextTokens;
-
+ 
         // Remove non-critical sections (context items) first
         const sectionRegex = /^#+\s+/m;
         const sections = fullContext.split(sectionRegex).slice(1); // Skip first empty element
-
+ 
         if (sections.length > 1) {
             // Remove from the beginning (oldest context)
             truncated = sections.slice(1).join('\n---\n');
-            removedTokens = currentContextTokens - this.estimateTokens(truncated);
-
-            if (this.estimateTokens(truncated) <= maxContext) {
-                return { 
-                    truncated, 
-                    wasExceeded: true, 
-                    removedTokens 
+            removedTokens = currentContextTokens - await this.getTokenCountFromLLM(truncated);
+ 
+            if (await this.getTokenCountFromLLM(truncated) <= maxContext) {
+                return {
+                    truncated,
+                    wasExceeded: true,
+                    removedTokens
                 };
             }
         }
-
+ 
         // If still too large, truncate middle sections
         const maxChars = maxContext * 4;
         if (fullContext.length > maxChars) {
@@ -140,26 +158,27 @@ export class TokenManager {
                 truncated = truncated.substring(0, lastNewline) + '\n... (context truncated)';
             }
         }
-
+ 
         return {
             truncated,
             wasExceeded: true,
-            removedTokens: currentContextTokens - this.estimateTokens(truncated)
+            removedTokens: currentContextTokens - await this.getTokenCountFromLLM(truncated)
         };
     }
 
     /**
      * Create a summary of what was removed for the next turn
      */
-    createContinuationSummary(removedContext: string, taskSoFar: string): string {
+    async createContinuationSummary(removedContext: string, taskSoFar: string): Promise<string> {
+        const removedTokens = await this.getTokenCountFromLLM(removedContext);
         const summary = `## Continuation from Previous Turn
-
-The following context was temporarily removed due to token limits but is available if needed:
-- Removed ${this.estimateTokens(removedContext)} tokens of previous context
-- Continue based on task progress: ${taskSoFar}
-
-To continue: refer to previous findings but focus on next steps.`;
-        
+ 
+ The following context was temporarily removed due to token limits but is available if needed:
+ - Removed ${removedTokens} tokens of previous context
+ - Continue based on task progress: ${taskSoFar}
+ 
+ To continue: refer to previous findings but focus on next steps.`;
+         
         return summary;
     }
 
@@ -176,6 +195,14 @@ To continue: refer to previous findings but focus on next steps.`;
     reloadConfig(): void {
         this.limits = this.loadLimits();
         console.log(`[VIBEY][TokenManager] Configuration reloaded:`, this.limits);
+    }
+
+    /**
+     * Reset the cumulative token count (e.g., when context is cleared)
+     */
+    resetCumulativeTokenCount(): void {
+        console.log(`[VIBEY][TokenManager] Resetting cumulative token count`);
+        // This method will be used to reset the cumulative token count when the context is cleared
     }
 
     /**

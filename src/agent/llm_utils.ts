@@ -2,7 +2,14 @@
 import { LLMProvider } from './types';
 import { HistoryEntry } from './history_utils';
 
-export async function callLLM(llm: LLMProvider, history: HistoryEntry[], signal: AbortSignal): Promise<string> {
+export async function callLLM(llm: LLMProvider, history: HistoryEntry[], signal: AbortSignal): Promise<{
+    content: string;
+    usage?: {
+        prompt_tokens: number;
+        completion_tokens: number;
+        total_tokens: number;
+    };
+}> {
     return await llm.chat(history, signal);
 }
 
@@ -157,11 +164,11 @@ export function parseLLMResponse(responseText: string, onUpdate?: (update: any) 
         if (extractionError) {
             console.log(`[VIBEY][LLM_Utils] Extraction error: ${extractionError}`);
         }
-        
+         
         // Handle empty response case
         if (!responseText || responseText.trim() === '') {
             console.warn(`[VIBEY][LLM_Utils] ⚠️ Empty response received from LLM`);
-            
+             
             // Report detailed error in UI
             if (onUpdate) {
                 onUpdate({
@@ -180,10 +187,11 @@ ${extractionError ? '**Extraction error**: ' + extractionError : ''}
 This is typically a temporary issue. Please try again or check your LLM connection.`
                 });
             }
-            
-            return { text: responseText };
+             
+            // Return a special marker to indicate empty response for retry logic
+            return { text: responseText, isEmptyResponse: true };
         }
-        
+         
         return { text: responseText };
     }
 

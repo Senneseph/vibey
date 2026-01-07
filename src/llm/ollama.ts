@@ -51,7 +51,14 @@ export class OllamaClient implements LLMProvider {
     }
 
 
-    async chat(messages: ChatMessage[], signal?: AbortSignal): Promise<string> {
+    async chat(messages: ChatMessage[], signal?: AbortSignal): Promise<{
+        content: string;
+        usage?: {
+            prompt_tokens: number;
+            completion_tokens: number;
+            total_tokens: number;
+        };
+    }> {
         const { modelName, baseUrl } = this.getConfig();
         const startTime = Date.now();
 
@@ -151,8 +158,16 @@ export class OllamaClient implements LLMProvider {
             if (metricsCollector && data.eval_count !== undefined) {
                 metricsCollector.record('tokens_received', data.eval_count);
             }
-
-            return data.message.content;
+ 
+            // Return both the response content and token usage data
+            return {
+                content: data.message.content,
+                usage: {
+                    prompt_tokens: data.prompt_eval_count || 0,
+                    completion_tokens: data.eval_count || 0,
+                    total_tokens: (data.prompt_eval_count || 0) + (data.eval_count || 0)
+                }
+            };
 
         } catch (error: any) {
             const totalElapsed = Date.now() - startTime;

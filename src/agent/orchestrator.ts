@@ -36,11 +36,20 @@ export class AgentOrchestrator {
     public resetContext() {
         // Clear the context history, keeping only the system prompt
         this.conversationManager.clearHistory();
-        
+         
         // Clear the context manager's master context AND all checkpoints
         this.contextManager.clearMasterContext();
         this.contextManager.clearAllCheckpointContext();
         
+        // Reset the cumulative token count
+        this.tokenManager.resetCumulativeTokenCount();
+        
+        // Reset token metrics to start fresh tracking
+        const metricsCollector = getMetricsCollector();
+        if (metricsCollector) {
+            metricsCollector.resetTokenMetrics();
+        }
+         
         console.log('[VIBEY][Orchestrator] Context reset completed - all context cleared');
     }
 
@@ -148,10 +157,12 @@ When done, respond with plain text summarizing what you accomplished.
             console.log(`[VIBEY][Orchestrator] Context block size: ${contextBlock.length} characters (~${Math.ceil(contextBlock.length / 4)} tokens)`);
             
             // Calculate token usage BEFORE adding to history
-            const systemPromptTokens = this.tokenManager.estimateTokens(this.context.history[0].content);
-            const userMessageTokens = this.tokenManager.estimateTokens(userMessage);
-            const contextTokens = this.tokenManager.estimateTokens(contextBlock);
-            
+            const [systemPromptTokens, userMessageTokens, contextTokens] = await Promise.all([
+                this.tokenManager.getTokenCountFromLLM(this.context.history[0].content),
+                this.tokenManager.getTokenCountFromLLM(userMessage),
+                this.tokenManager.getTokenCountFromLLM(contextBlock)
+            ]);
+             
             const tokenUsage: TokenUsage = {
                 systemPrompt: systemPromptTokens,
                 context: contextTokens,
@@ -181,25 +192,25 @@ When done, respond with plain text summarizing what you accomplished.
             }
             
             // Check if we're exceeding token limits
-            if (this.tokenManager.isExceeded(tokenUsage.total)) {
-                console.warn(`[VIBEY][Orchestrator] ⚠️ WARNING: Total tokens (${tokenUsage.total}) exceeds limit (${this.tokenManager.getConfig().maxTokens})`);
-                 
-                // Truncate context to fit within limits
-                const truncated = this.tokenManager.truncateContext(
-                    contextBlock,
-                    systemPromptTokens,
-                    userMessageTokens
-                );
-                 
-                if (truncated.wasExceeded) {
-                    console.warn(`[VIBEY][Orchestrator] Context truncated - removed ${truncated.removedTokens} tokens`);
-                    if (onUpdate) {
-                        onUpdate({
-                            type: 'warning',
-                            message: `Context was too large (${tokenUsage.context} tokens). Truncated to fit within ${this.tokenManager.getConfig().maxTokens} token limit.`
-                        });
-                    }
+        if (this.tokenManager.isExceeded(tokenUsage.total)) {
+            console.warn(`[VIBEY][Orchestrator] ⚠️ WARNING: Total tokens (${tokenUsage.total}) exceeds limit (${this.tokenManager.getConfig().maxTokens})`);
+              
+            // Truncate context to fit within limits
+            const truncated = await this.tokenManager.truncateContext(
+                contextBlock,
+                systemPromptTokens,
+                userMessageTokens
+            );
+              
+            if (truncated.wasExceeded) {
+                console.warn(`[VIBEY][Orchestrator] Context truncated - removed ${truncated.removedTokens} tokens`);
+                if (onUpdate) {
+                    onUpdate({
+                        type: 'warning',
+                        message: `Context was too large (${tokenUsage.context} tokens). Truncated to fit within ${this.tokenManager.getConfig().maxTokens} token limit.`
+                    });
                 }
+            }
             } else if (this.tokenManager.isApproachingLimit(tokenUsage.total)) {
                 console.warn(`[VIBEY][Orchestrator] ⚠️ Approaching token limit: ${tokenUsage.total}/${this.tokenManager.getConfig().maxTokens} tokens`);
                 
@@ -331,52 +342,94 @@ ${summaryResponse}
                    });
                }
                
-               let responseText;
-               try {
-                   // Use the conversation manager to get the history for the LLM
-                   const historyForLLM = this.conversationManager.getHistoryForLLM();
+               let responseText: string = '';
+               let retryCount = 0;
+               const maxRetries = 3;
 
-                   // DEBUG: Show what we're sending to the LLM in the UI
-                   if (onUpdate) {
-                       const debugInfo = `**[DEBUG] LLM Call #${iterationCount}**
+               while (retryCount <= maxRetries) {
+                   try {
+                       // Use the conversation manager to get the history for the LLM
+                       const historyForLLM = this.conversationManager.getHistoryForLLM();
+
+                       // DEBUG: Show what we're sending to the LLM in the UI
+                       if (onUpdate) {
+                           const debugInfo = `**[DEBUG] LLM Call #${iterationCount}${retryCount > 0 ? ` (Retry ${retryCount})` : ''}**
 
 Sending ${historyForLLM.length} messages to LLM:
 ${historyForLLM.slice(-3).map((m, i) => `${i + 1}. **${m.role}**: ${typeof m.content === 'string' ? m.content.substring(0, 150) : JSON.stringify(m.content).substring(0, 150)}...`).join('\n')}`;
 
-                       onUpdate({
-                           type: 'info',
-                           message: debugInfo
+                           onUpdate({
+                               type: 'info',
+                               message: debugInfo
+                           });
+                       }
+
+                       console.log(`[VIBEY][Orchestrator] ========== LLM CALL #${iterationCount}${retryCount > 0 ? ` (Retry ${retryCount})` : ''} ==========`);
+                       console.log(`[VIBEY][Orchestrator] Sending ${historyForLLM.length} messages to LLM`);
+                       historyForLLM.forEach((msg, idx) => {
+                           const preview = typeof msg.content === 'string' ? msg.content.substring(0, 200) : JSON.stringify(msg.content).substring(0, 200);
+                           console.log(`[VIBEY][Orchestrator]   [${idx}] ${msg.role}: ${preview}...`);
                        });
-                   }
 
-                   console.log(`[VIBEY][Orchestrator] ========== LLM CALL #${iterationCount} ==========`);
-                   console.log(`[VIBEY][Orchestrator] Sending ${historyForLLM.length} messages to LLM`);
-                   historyForLLM.forEach((msg, idx) => {
-                       const preview = typeof msg.content === 'string' ? msg.content.substring(0, 200) : JSON.stringify(msg.content).substring(0, 200);
-                       console.log(`[VIBEY][Orchestrator]   [${idx}] ${msg.role}: ${preview}...`);
-                   });
+                       const llmResponse = await callLLM(this.llm, historyForLLM, signal);
+                       responseText = llmResponse.content;
+                       lastResponseText = responseText; // Store for debugging
 
-                   responseText = await callLLM(this.llm, historyForLLM, signal);
-                   lastResponseText = responseText; // Store for debugging
+                       // Update token usage from LLM response
+                       if (llmResponse.usage) {
+                           await this.tokenManager.updateTokenUsageFromLLMResponse(llmResponse.usage);
+                       }
 
-                   // DEBUG: Show what we got back from the LLM in the UI
-                   if (onUpdate) {
-                       const responsePreview = responseText.substring(0, 500);
-                       onUpdate({
-                           type: 'info',
-                           message: `**[DEBUG] LLM Response #${iterationCount}**\n\n\`\`\`\n${responsePreview}${responseText.length > 500 ? '\n...(truncated)' : ''}\n\`\`\``
-                       });
-                   }
+                       // DEBUG: Show what we got back from the LLM in the UI
+                       if (onUpdate) {
+                           const responsePreview = responseText.substring(0, 500);
+                           onUpdate({
+                               type: 'info',
+                               message: `**[DEBUG] LLM Response #${iterationCount}${retryCount > 0 ? ` (Retry ${retryCount})` : ''}**\n\n\`\`\`\n${responsePreview}${responseText.length > 500 ? '\n...(truncated)' : ''}\n\`\`\``
+                           });
+                       }
 
-                   console.log(`[VIBEY][Orchestrator] ========== LLM RESPONSE #${iterationCount} ==========`);
-                   console.log(`[VIBEY][Orchestrator] Response length: ${responseText.length} chars`);
-                   console.log(`[VIBEY][Orchestrator] Response: ${responseText.substring(0, 500)}...`);
-               } catch (error: any) {
-                   // Log the full API message in the chat window for debugging
-                   console.error(`[VIBEY][Orchestrator] LLM API Error:`, error);
+                       console.log(`[VIBEY][Orchestrator] ========== LLM RESPONSE #${iterationCount}${retryCount > 0 ? ` (Retry ${retryCount})` : ''} ==========`);
+                       console.log(`[VIBEY][Orchestrator] Response length: ${responseText.length} chars`);
+                       console.log(`[VIBEY][Orchestrator] Response: ${responseText.substring(0, 500)}...`);
 
-                   // Create detailed error report for UI
-                   const errorReport = `**LLM API Error**
+                       // Check if response is empty and we should retry
+                       if (!responseText || responseText.trim() === '') {
+                           if (retryCount < maxRetries) {
+                               console.warn(`[VIBEY][Orchestrator] ⚠️ Empty response received, retrying (${retryCount + 1}/${maxRetries})...`);
+                               if (onUpdate) {
+                                   onUpdate({
+                                       type: 'warning',
+                                       message: `Empty response received from LLM. Retrying (${retryCount + 1}/${maxRetries})...`
+                                   });
+                               }
+                               retryCount++;
+                               continue; // Retry the LLM call
+                           } else {
+                               console.error(`[VIBEY][Orchestrator] ❌ Max retries (${maxRetries}) reached for empty response`);
+                               if (onUpdate) {
+                                   onUpdate({
+                                       type: 'error',
+                                       message: `**ERROR: Max retries (${maxRetries}) reached**\n\nThe LLM consistently returned empty responses. This may indicate a connection issue or LLM problem.`
+                                   });
+                               }
+                               throw new Error(`Max retries (${maxRetries}) reached for empty LLM response`);
+                           }
+                       }
+
+                       // If we get here, we have a valid response
+                       // Ensure responseText is always a string
+                       if (!responseText) {
+                           responseText = '';
+                       }
+                       break;
+
+                   } catch (error: any) {
+                       // Log the full API message in the chat window for debugging
+                       console.error(`[VIBEY][Orchestrator] LLM API Error:`, error);
+
+                       // Create detailed error report for UI
+                       const errorReport = `**LLM API Error**
 
 ${error.message}
 
@@ -400,13 +453,14 @@ ${JSON.stringify(this.context.history[this.context.history.length - 1], null, 2)
 ${JSON.stringify(tokenUsage, null, 2)}
 \`\`\``;
 
-                   if (onUpdate) {
-                       onUpdate({
-                           type: 'error',
-                           message: errorReport
-                       });
+                       if (onUpdate) {
+                           onUpdate({
+                               type: 'error',
+                               message: errorReport
+                           });
+                       }
+                       throw error;
                    }
-                   throw error;
                }
                 
                 // Calculate actual fetch duration and send update
@@ -436,6 +490,7 @@ ${JSON.stringify(tokenUsage, null, 2)}
                 console.log(`[VIBEY][Orchestrator]   - has 'thought' property: ${!!parsed?.thought}`);
                 console.log(`[VIBEY][Orchestrator]   - has 'tool_calls' property: ${!!parsed?.tool_calls}`);
                 console.log(`[VIBEY][Orchestrator]   - tool_calls is array: ${Array.isArray(parsed?.tool_calls)}`);
+                console.log(`[VIBEY][Orchestrator]   - isEmptyResponse: ${!!parsed?.isEmptyResponse}`);
 
                 // DEBUG: Show parsing decision in UI
                 if (onUpdate) {
@@ -446,6 +501,17 @@ ${JSON.stringify(tokenUsage, null, 2)}
                         type: 'info',
                         message: `**[DEBUG] Parse Decision #${iterationCount}**: ${decision}\n\nParsed: \`${JSON.stringify(parsed, null, 2).substring(0, 300)}\``
                     });
+                }
+
+                // Handle empty response case
+                if (parsed?.isEmptyResponse) {
+                    console.log(`[VIBEY][Orchestrator] ✅ DECISION: Empty response detected - BREAKING LOOP`);
+                    if (onUpdate) {
+                        onUpdate({ type: 'info', message: `**[DEBUG]** Empty response detected, exiting loop` });
+                    }
+                    pushHistory(this.context.history, { role: 'assistant', content: responseText });
+                    finalResponse = responseText;
+                    break;
                 }
 
                 if (!parsed || parsed.text) {
