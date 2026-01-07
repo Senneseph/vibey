@@ -34,6 +34,31 @@ export class ChatPanel implements vscode.WebviewViewProvider {
             localResourceRoots: [this._extensionUri]
         };
 
+        // Add visibility change listener to handle webview reloads
+        webviewView.onDidChangeVisibility(async () => {
+            if (webviewView.visible) {
+                // Webview is now visible - reload history
+                try {
+                    this.currentHistory = await this.historyManager.loadHistory();
+                    const historyPreview = this.currentHistory.length > 0
+                        ? `[${this.currentHistory.length} messages, first: "${this.currentHistory[0]?.role}"]`
+                        : '[]';
+                    console.log('[VIBEY][ChatPanel] Reloaded history on visibility change:', historyPreview);
+                    
+                    // Send restoreHistory message if webview is ready
+                    if (this.webviewReady) {
+                        console.log('[VIBEY][ChatPanel] Posting restoreHistory to webview on visibility change, message count:', this.currentHistory.length);
+                        this._view?.webview.postMessage({
+                            type: 'restoreHistory',
+                            messages: this.currentHistory
+                        });
+                    }
+                } catch (error: any) {
+                    console.error('[VIBEY][ChatPanel] Failed to reload history on visibility change:', error?.message);
+                }
+            }
+        });
+
         // Pre-load history before setting HTML - with error handling
         try {
             this.currentHistory = await this.historyManager.loadHistory();
