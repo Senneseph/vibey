@@ -69,19 +69,19 @@ export class OpenAICompatibleClient implements LLMProvider {
      */
     private formatMessagesForLlamaCpp(messages: ChatMessage[]): ChatMessage[] {
         const formattedMessages: ChatMessage[] = [];
-         
+        
         // Always start with system message if present
         const systemMessage = messages.find(m => m.role === 'system');
         if (systemMessage) {
             formattedMessages.push(systemMessage);
         }
-         
+        
         // Process remaining messages, handling tool calls specially
         let lastRole: 'user' | 'assistant' | null = null;
-         
+        
         for (const message of messages) {
             if (message.role === 'system') continue; // Already handled
-             
+            
             if (message.role === 'tool') {
                 // Convert tool messages to user/assistant format for llama.cpp
                 // Tool results are always treated as user messages (as if user provided the result)
@@ -89,7 +89,7 @@ export class OpenAICompatibleClient implements LLMProvider {
                     const toolData = typeof message.content === 'string'
                         ? JSON.parse(message.content)
                         : message.content;
-                     
+                    
                     // Tool result - treat as user message with minimal formatting
                     formattedMessages.push({
                         role: 'user',
@@ -112,7 +112,7 @@ export class OpenAICompatibleClient implements LLMProvider {
                     // If we have consecutive same roles, this is a problem
                     // For llama.cpp, we need to ensure alternation
                     console.warn(`[VIBEY][OpenAI-Compatible] ⚠️  Detected consecutive ${message.role} messages - this may cause issues with llama.cpp`);
-                     
+                    
                     // Try to fix the alternation by inserting a dummy message
                     if (message.role === 'user') {
                         formattedMessages.push({
@@ -128,12 +128,12 @@ export class OpenAICompatibleClient implements LLMProvider {
                         lastRole = 'user';
                     }
                 }
-                 
+                
                 formattedMessages.push(message);
                 lastRole = message.role;
             }
         }
-         
+        
         return formattedMessages;
     }
 
@@ -188,106 +188,131 @@ export class OpenAICompatibleClient implements LLMProvider {
             console.log(`[VIBEY][OpenAI-Compatible] Message ${idx} (${msg.role}): "${preview}"`);
         });
 
-        try {
-            // Check endpoint health before sending request
-            const healthCheck = await this.checkEndpointHealth(normalizedBaseUrl);
-            if (!healthCheck.ok) {
-                console.warn(`[VIBEY][OpenAI-Compatible] ⚠️  WARNING: Endpoint may not be available (${healthCheck.info})`);
-                console.warn(`[VIBEY][OpenAI-Compatible] Continuing anyway - will timeout if unreachable`);
-            }
+        // Retry configuration
+        const maxRetries = 2; // Total attempts: 1 initial + 2 retries = 3 total
+        let retryCount = 0;
+        let lastError: Error | null = null;
+        
+        // Retry loop
+        while (retryCount <= maxRetries) {
+            const attemptStartTime = Date.now();
+            console.log(`[VIBEY][OpenAI-Compatible] Attempt ${retryCount + 1}/${maxRetries + 1}...`);
             
-            console.log(`[VIBEY][OpenAI-Compatible] Initiating fetch request at ${new Date().toISOString()}...`);
-            console.log(`[VIBEY][OpenAI-Compatible] Sending ${payloadString.length} bytes to ${chatEndpoint}`);
-            const fetchStartTime = Date.now();
-            
-            // Create a timeout monitor
-            let lastLog = 0;
-            const timeoutMonitor = setInterval(() => {
-                const elapsed = Date.now() - fetchStartTime;
-                if (elapsed - lastLog >= 5000) {  // Log every 5 seconds
-                    console.log(`[VIBEY][OpenAI-Compatible] ⏳ Request still pending after ${elapsed}ms - Server may be processing`);
-                    lastLog = elapsed;
+            try {
+                // Check endpoint health before sending request
+                const healthCheck = await this.checkEndpointHealth(normalizedBaseUrl);
+                if (!healthCheck.ok) {
+                    console.warn(`[VIBEY][OpenAI-Compatible] ⚠️  WARNING: Endpoint may not be available (${healthCheck.info})`);
+                    console.warn(`[VIBEY][OpenAI-Compatible] Continuing anyway - will timeout if unreachable`);
                 }
-            }, 1000);
-            
-            const response = await fetch(chatEndpoint, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(apiKey ? {'Authorization': `Bearer ${apiKey}`} : {})
-                },
-                body: payloadString,
-                signal // Pass signal to fetch
-            });
-            
-            clearInterval(timeoutMonitor);
+                
+                console.log(`[VIBEY][OpenAI-Compatible] Initiating fetch request at ${new Date().toISOString()}...`);
+                console.log(`[VIBEY][OpenAI-Compatible] Sending ${payloadString.length} bytes to ${chatEndpoint}`);
+                const fetchStartTime = Date.now();
+                
+                // Create a timeout monitor
+                let lastLog = 0;
+                const timeoutMonitor = setInterval(() => {
+                    const elapsed = Date.now() - fetchStartTime;
+                    if (elapsed - lastLog >= 5000) {  // Log every 5 seconds
+                        console.log(`[VIBEY][OpenAI-Compatible] ⏳ Request still pending after ${elapsed}ms - Server may be processing`);
+                        lastLog = elapsed;
+                    }
+                }, 1000);
+                
+                const response = await fetch(chatEndpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...(apiKey ? {'Authorization': `Bearer ${apiKey}`} : {})
+                    },
+                    body: payloadString,
+                    signal // Pass signal to fetch
+                });
+                
+                clearInterval(timeoutMonitor);
 
-            const fetchElapsed = Date.now() - fetchStartTime;
-            const totalElapsed = Date.now() - startTime;
-            console.log(`[VIBEY][OpenAI-Compatible] ✅ Fetch completed in ${fetchElapsed}ms (total elapsed: ${totalElapsed}ms) with status ${response.status}`);
+                const fetchElapsed = Date.now() - fetchStartTime;
+                const totalElapsed = Date.now() - startTime;
+                console.log(`[VIBEY][OpenAI-Compatible] ✅ Fetch completed in ${fetchElapsed}ms (total elapsed: ${totalElapsed}ms) with status ${response.status}`);
 
-            if (!response.ok) {
-                const errorText = await response.text().catch(() => 'Could not read error response');
-                console.error(`[VIBEY][OpenAI-Compatible] API returned error: ${response.statusText}`);
-                console.error(`[VIBEY][OpenAI-Compatible] Status: ${response.status}`);
-                console.error(`[VIBEY][OpenAI-Compatible] Response: ${errorText.substring(0, 200)}`);
-                throw new Error(`OpenAI-Compatible API error: ${response.statusText} (status ${response.status})`);
+                if (!response.ok) {
+                    const errorText = await response.text().catch(() => 'Could not read error response');
+                    console.error(`[VIBEY][OpenAI-Compatible] API returned error: ${response.statusText}`);
+                    console.error(`[VIBEY][OpenAI-Compatible] Status: ${response.status}`);
+                    console.error(`[VIBEY][OpenAI-Compatible] Response: ${errorText.substring(0, 200)}`);
+                    throw new Error(`OpenAI-Compatible API error: ${response.statusText} (status ${response.status})`);
+                }
+
+                console.log(`[VIBEY][OpenAI-Compatible] Parsing JSON response...`);
+                const parseStartTime = Date.now();
+                
+                // Check if response body is empty
+                const responseText = await response.text();
+                if (!responseText || responseText.trim() === '') {
+                    console.error(`[VIBEY][OpenAI-Compatible] ❌ Empty response received from server`);
+                    console.error(`[VIBEY][OpenAI-Compatible] This may indicate server glitch - will retry`);
+                    
+                    // Retry the request once
+                    if (retryCount < maxRetries) {
+                        console.log(`[VIBEY][OpenAI-Compatible] Retrying request (attempt ${retryCount + 1}/${maxRetries})...`);
+                        retryCount++;
+                        continue; // Skip to next iteration to retry
+                    } else {
+                        console.error(`[VIBEY][OpenAI-Compatible] ❌ Max retries reached - giving up`);
+                        throw new Error('Empty response received from LLM after maximum retries');
+                    }
+                }
+                
+                let data: OpenAIResponse;
+                try {
+                    data = JSON.parse(responseText) as OpenAIResponse;
+                } catch (parseError) {
+                    console.error(`[VIBEY][OpenAI-Compatible] ❌ Failed to parse JSON response:`, parseError);
+                    console.error(`[VIBEY][OpenAI-Compatible] Response text:`, responseText.substring(0, 500));
+                    
+                    // Retry the request once for parse errors too
+                    if (retryCount < maxRetries) {
+                        console.log(`[VIBEY][OpenAI-Compatible] Retrying request due to parse error (attempt ${retryCount + 1}/${maxRetries})...`);
+                        retryCount++;
+                        continue; // Skip to next iteration to retry
+                    } else {
+                        console.error(`[VIBEY][OpenAI-Compatible] ❌ Max retries reached for parse error - giving up`);
+                        throw new Error(`Failed to parse LLM response after maximum retries: ${(parseError as Error).message}`);
+                    }
+                }
+                
+                const parseElapsed = Date.now() - parseStartTime;
+
+                const responseElapsed = Date.now() - fetchStartTime;
+                const totalElapsedFinal = Date.now() - startTime;
+                console.log(`[VIBEY][OpenAI-Compatible] Response parsed in ${parseElapsed}ms (total fetch: ${responseElapsed}ms, total: ${totalElapsedFinal}ms)`);
+                
+                // Track token usage
+                const metricsCollector = getMetricsCollector();
+                if (metricsCollector && data.usage) {
+                    metricsCollector.record('tokens_sent', data.usage.prompt_tokens);
+                    metricsCollector.record('tokens_received', data.usage.completion_tokens);
+                }
+
+                return data.choices[0].message.content;
+
+            } catch (error: any) {
+                lastError = error;
+                retryCount++;
+                
+                if (retryCount <= maxRetries) {
+                    console.log(`[VIBEY][OpenAI-Compatible] Retry ${retryCount}/${maxRetries} due to error: ${error.message}`);
+                    // Add small delay before retry
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
             }
-
-            console.log(`[VIBEY][OpenAI-Compatible] Parsing JSON response...`);
-            const parseStartTime = Date.now();
-            const data = await response.json() as OpenAIResponse;
-            const parseElapsed = Date.now() - parseStartTime;
-
-            const responseElapsed = Date.now() - fetchStartTime;
-            const totalElapsedFinal = Date.now() - startTime;
-            console.log(`[VIBEY][OpenAI-Compatible] Response parsed in ${parseElapsed}ms (total fetch: ${responseElapsed}ms, total: ${totalElapsedFinal}ms)`);
-            
-            // Track token usage
-            const metricsCollector = getMetricsCollector();
-            if (metricsCollector && data.usage) {
-                metricsCollector.record('tokens_sent', data.usage.prompt_tokens);
-                metricsCollector.record('tokens_received', data.usage.completion_tokens);
-            }
-
-            return data.choices[0].message.content;
-
-        } catch (error: any) {
-            const totalElapsed = Date.now() - startTime;
-            console.error(`[VIBEY][OpenAI-Compatible] ❌ Error after ${totalElapsed}ms:`, error.message);
-            
-            if (error.name === 'AbortError') {
-                console.error(`[VIBEY][OpenAI-Compatible] Request was cancelled by user`);
-                throw new Error('Request cancelled by user');
-            }
-            
-            // Detailed error diagnostics
-            if (error instanceof TypeError) {
-                console.error(`[VIBEY][OpenAI-Compatible] ❌ NETWORK ERROR - Cannot connect to endpoint`);
-                console.error(`[VIBEY][OpenAI-Compatible] This typically means:`);
-                console.error(`[VIBEY][OpenAI-Compatible]   1. Server is NOT running (Check: ${baseUrl})`);
-                console.error(`[VIBEY][OpenAI-Compatible]   2. URL is wrong (Check: vibey.openaiBaseUrl setting = ${baseUrl})`);
-                console.error(`[VIBEY][OpenAI-Compatible]   3. Network connectivity issue (Check firewall/VPN)`);
-                console.error(`[VIBEY][OpenAI-Compatible]   4. Wrong port or path (Should be /v1)`);
-                console.error(`[VIBEY][OpenAI-Compatible]   5. API key required but not provided`);
-            } else if (error.message.includes('JSON')) {
-                console.error(`[VIBEY][OpenAI-Compatible] ❌ RESPONSE PARSING ERROR`);
-                console.error(`[VIBEY][OpenAI-Compatible] Server sent invalid JSON response`);
-                console.error(`[VIBEY][OpenAI-Compatible] Possible causes:`);
-                console.error(`[VIBEY][OpenAI-Compatible]   1. Model is crashing/unloading`);
-                console.error(`[VIBEY][OpenAI-Compatible]   2. Server error`);
-            } else if (error.message.includes('status')) {
-                console.error(`[VIBEY][OpenAI-Compatible] ❌ HTTP ERROR FROM SERVER`);
-                console.error(`[VIBEY][OpenAI-Compatible] Server returned an error code`);
-                console.error(`[VIBEY][OpenAI-Compatible] Check server logs for details`);
-            }
-            
-            console.error(`[VIBEY][OpenAI-Compatible] Full error:`, error);
-            console.error(`[VIBEY][OpenAI-Compatible] Error name: ${error.name}`);
-            console.error(`[VIBEY][OpenAI-Compatible] Error message: ${error.message}`);
-            console.error(`[VIBEY][OpenAI-Compatible] Stack:`, error.stack);
-            throw error;
         }
+        
+        // If we get here, all retries failed
+        const totalElapsed = Date.now() - startTime;
+        console.error(`[VIBEY][OpenAI-Compatible] ❌ All ${maxRetries + 1} attempts failed after ${totalElapsed}ms`);
+        throw lastError || new Error('All retry attempts failed');
     }
 
     async listModels(): Promise<string[]> {
