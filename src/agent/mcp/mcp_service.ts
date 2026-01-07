@@ -536,6 +536,8 @@ export class McpService {
             console.log(`[MCP] DEBUG: Initial configuredNames: ${JSON.stringify(Array.from(configuredNames))}`);
             console.log(`[MCP] DEBUG: Marketplace servers to add: ${this.marketplaceServers.length}`);
 
+            let marketplaceServersAdded = false;
+
             // Add marketplace servers that aren't already configured
             for (const marketplaceServer of this.marketplaceServers) {
                 console.log(`[MCP] DEBUG: Processing marketplace server: ${marketplaceServer.id}`);
@@ -561,12 +563,20 @@ export class McpService {
                     console.log(`[MCP] DEBUG: Adding server ${marketplaceServer.id} with config:`, serverConfig);
                     servers[marketplaceServer.id] = serverConfig;
                     configuredNames.add(marketplaceServer.id);
+                    marketplaceServersAdded = true;
                     console.log(`[MCP] Added marketplace server: ${marketplaceServer.id}`);
                     
                     // Debug: Verify the server was added
                     console.log(`[MCP] DEBUG: Server ${marketplaceServer.id} added? ${marketplaceServer.id in servers}`);
                     console.log(`[MCP] DEBUG: Current servers: ${JSON.stringify(Object.keys(servers))}`);
                 }
+            }
+            
+            // If we added marketplace servers, persist them to the configuration
+            if (marketplaceServersAdded) {
+                console.log(`[MCP] Persisting ${Object.keys(servers).length} servers to configuration`);
+                await config.update('mcpServers', servers, vscode.ConfigurationTarget.Global);
+                console.log(`[MCP] Successfully updated MCP servers configuration`);
             }
             
             // Debug: Log the current state of servers after adding marketplace servers
@@ -844,6 +854,58 @@ export class McpService {
             }).join('\n');
         }
         return JSON.stringify(content);
+    }
+
+    /**
+     * Get all available MCP servers (both configured and marketplace)
+     * This method returns a comprehensive view of all available MCP servers
+     */
+    public async getAvailableMcpServers(): Promise<{
+        configuredServers: Array<{name: string; config: McpServerConfig; state?: McpServerState}>;
+        marketplaceServers: MarketplaceServerConfig[];
+        allServers: Array<{name: string; source: 'configured' | 'marketplace'; config: McpServerConfig; state?: McpServerState}>;
+    }> {
+        // Get configured servers from current state
+        const configuredServers = this.getServerStates().map(state => ({
+            name: state.name,
+            config: state.config,
+            state
+        }));
+
+        // Get marketplace servers
+        const marketplaceServers = await this.getMarketplaceServers();
+
+        // Combine all servers with source information
+        const allServers: Array<{name: string; source: 'configured' | 'marketplace'; config: McpServerConfig; state?: McpServerState}> = [];
+
+        // Add configured servers
+        configuredServers.forEach(server => {
+            allServers.push({
+                name: server.name,
+                source: 'configured',
+                config: server.config,
+                state: server.state
+            });
+        });
+
+        // Add marketplace servers that aren't already configured
+        marketplaceServers.forEach(marketplaceServer => {
+            const alreadyConfigured = configuredServers.some(s => s.name === marketplaceServer.id);
+            if (!alreadyConfigured) {
+                allServers.push({
+                    name: marketplaceServer.id,
+                    source: 'marketplace',
+                    config: marketplaceServer.config,
+                    state: undefined
+                });
+            }
+        });
+
+        return {
+            configuredServers,
+            marketplaceServers,
+            allServers
+        };
     }
 }
 

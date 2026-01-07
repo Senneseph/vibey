@@ -24,6 +24,7 @@ import { createMcpTools } from './tools/definitions/mcp';
 import { ContextManager } from './agent/context_manager';
 import { FeatureTestRunner, FeatureTestReport } from './agent/testing/test_runner';
 import { McpMarketplaceView } from './ui/MCP-Marketplace/McpMarketplaceView';
+import { McpSettingsView } from './ui/MCP-Settings/McpSettingsView';
 import { MemoryService } from './agent/mcp/memory_service';
 
 // Module-level references for cleanup
@@ -452,6 +453,16 @@ export async function activate(context: vscode.ExtensionContext) {
             vscode.window.showInformationMessage('MCP marketplace refreshed successfully');
         });
 
+        // MCP Settings Commands
+        const showSettingsCommand = vscode.commands.registerCommand('vibey.showMcpSettings', () => {
+            if (!mcpService) {
+                vscode.window.showErrorMessage('MCP service not initialized');
+                return;
+            }
+            const settingsView = new McpSettingsView(context, mcpService);
+            settingsView.show();
+        });
+
         context.subscriptions.push(startCommand);
         context.subscriptions.push(settingsCommand);
         context.subscriptions.push(selectModelCommand);
@@ -463,6 +474,7 @@ export async function activate(context: vscode.ExtensionContext) {
         context.subscriptions.push(featureTestCommand);
         context.subscriptions.push(showMarketplaceCommand);
         context.subscriptions.push(refreshMarketplaceCommand);
+        context.subscriptions.push(showSettingsCommand);
 
         console.log('[VIBEY][activate] Extension activated successfully!');
     } catch (error: any) {
